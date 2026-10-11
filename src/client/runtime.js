@@ -76,13 +76,13 @@ function buildShellAlignmentCss(bodyAttribute, opaqueFills, backdrop) {
   }
   if (opaqueFills !== null) {
     // The right sidebar panel hangs over the conversation area in its
-    // fullscreen mode; give its shell the same solid skin color as the rest
-    // of the chrome so translucent panel surfaces never float over chat text.
-    // [data-rightbar-col] is a stable layout attribute; `_panel` reaches the
-    // panel shell and its body within the column.
+    // fullscreen mode; give its top-level occupant node the same solid skin
+    // color as the rest of the chrome, so translucent panel surfaces never
+    // float over chat text regardless of which package occupies the column.
+    // [data-rightbar-col] is a stable layout attribute.
     lines.push(
-      `${scoped} [data-rightbar-col] [class*="_panel"]{background:${opaqueFills.light}!important}`,
-      `${scoped}[data-ds-dark-theme] [data-rightbar-col] [class*="_panel"]{background:${opaqueFills.dark}!important}`,
+      `${scoped} [data-rightbar-col] > *{background-color:${opaqueFills.light}!important}`,
+      `${scoped}[data-ds-dark-theme] [data-rightbar-col] > *{background-color:${opaqueFills.dark}!important}`,
     );
   }
   return lines.join("\n");
