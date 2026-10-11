@@ -167,6 +167,26 @@ export function createSkinRuntime() {
     return rules.length === 0 ? null : rules.join("\n");
   }
 
+// Windows Desktop shell-frame alignment (ADR-0009): with `data-windows-titlebar`
+// the host AppFrame paints `--dsw-specific-sidebar-fill` three times on the
+// caption/sidebar side (frame background + titlebar ::before + sidebar column)
+// while the content column's 16px corner notch shows the frame background ONCE.
+// Official tokens are opaque so the stacks are invisible; translucent skin
+// tokens turn the notch into a wallpaper-colored petal (light AND dark, all
+// skins). CSS cannot repaint the notch — the only uniform state reachable is
+// single-paint: drop the caption strip's and sidebar column's own fills and let
+// the frame background carry the surface everywhere. Both rules are gated by
+// the public `html[data-windows-titlebar]` marker (never matches ordinary Web),
+// pinned to structural css-modules local names (`_frame` / `_sidebarCol`,
+// ADR-0006/0007 doctrine) with a `:has(> [class*="_sidebarCol"])` anchor so
+// only the host AppFrame matches; scripts/verify-upstream-hooks.mjs (#7) fails
+// `check` when those local names drift.
+const SHELL_ALIGNMENT_CSS = [
+  "// dsh-skins shell-frame single-paint alignment (ADR-0009)",
+  'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
+  'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
+].join("\n");
+
   function variablesCss(effects) {
     if (effects.cssVariables === null) return null;
     const selector = `body[${datasetAttribute(effects.bodyAttribute)}]`;
@@ -235,6 +255,15 @@ export function createSkinRuntime() {
 
       if (effects.staticCss !== null) {
         const tag = styleTag(`dsh-skins/${skin.id}.css`, effects.staticCss);
+        stops.push(() => tag.remove());
+      }
+
+      // Windows Desktop shell-frame alignment (ADR-0009): marker-scoped and
+      // skin-independent, so it mounts/unmounts with the skin transaction like
+      // every other emitted tag. Inert on Web (no titlebar marker) and gone
+      // with `official` (unmount restores the opaque host paints).
+      {
+        const tag = styleTag(`dsh-skins/${skin.id}.shell.css`, SHELL_ALIGNMENT_CSS);
         stops.push(() => tag.remove());
       }
 

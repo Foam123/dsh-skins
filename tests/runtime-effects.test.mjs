@@ -193,6 +193,31 @@ test("zero Desktop blur adds no filter, transform, or marker rule", () => {
   dispose();
 });
 
+test("shell-frame alignment: marker-scoped structural rules mount with the skin and pin the ADR-0009 block verbatim", () => {
+  const { dom, dispose } = bootOpenBmcWithDesktopBlur({ light: 0, dark: 0 });
+  const tag = dom.styleTag("dsh-skins/openbmc.shell.css");
+  assert.ok(tag, "shell alignment tag must mount with the skin");
+  assert.deepEqual(tag.textContent.split("\n"), [
+    "// dsh-skins shell-frame single-paint alignment (ADR-0009)",
+    'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
+    'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
+  ]);
+  assert.doesNotMatch(tag.textContent, /centerCol/, "no content-column class may be targeted");
+  dispose();
+  assert.equal(dom.styleTag("dsh-skins/openbmc.shell.css"), null, "shell tag must unmount with the skin");
+});
+
+test("shell-frame alignment: A→B switch swaps the tag; official restores the untouched host paints", () => {
+  const dom = installDom();
+  const { runtime } = bootMeirenzhi(dom);
+  assert.ok(dom.styleTag("dsh-skins/meirenzhi.shell.css"));
+  runtime.select("openbmc");
+  assert.equal(dom.styleTag("dsh-skins/meirenzhi.shell.css"), null, "old skin shell tag must go");
+  assert.ok(dom.styleTag("dsh-skins/openbmc.shell.css"), "new skin shell tag must mount");
+  runtime.select("official");
+  assert.equal(dom.styleTag("dsh-skins/openbmc.shell.css"), null, "official must drop the alignment so opaque host paints stand alone");
+});
+
 test("N1: a successful hot-update keeps the live skin fully intact", () => {
   const dom = installDom();
   const { runtime, ctx } = bootMeirenzhi(dom);
@@ -215,6 +240,7 @@ test("N1: a successful hot-update keeps the live skin fully intact", () => {
   assert.equal(result.degraded, "none");
   assert.ok(dom.styleTag("dsh-skins/meirenzhi.css"), "skin css tag must survive");
   assert.ok(dom.styleTag("dsh-skins/meirenzhi.backdrop.css"), "backdrop tag must survive");
+  assert.ok(dom.styleTag("dsh-skins/meirenzhi.shell.css"), "shell alignment tag must survive");
   assert.equal(dom.document.body.dataset.dshMeirenzhiSkin !== undefined, true, "body scope attr must survive");
   assert.equal(ctx.locale.dicts.get("conversation").get("zh")["hero.headline"], "风起凡尘 · 红颜问道");
   assert.ok(ctx.layers.get("dsh-skins/meirenzhi"), "token layer must survive");

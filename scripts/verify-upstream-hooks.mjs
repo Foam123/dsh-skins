@@ -36,10 +36,31 @@
  *                   name, _dialog_ local name, the _float* local-name
  *                   whitelist, and the --dsw-mask-blur /
  *                   --dsw-menu-backdrop-filter token definitions (ADR-0007)
+ *   7. shell frame  the Windows-Desktop single-paint alignment (ADR-0009)
+ *                   pins the AppFrame structural local names in
+ *                   dsh-client-ui-layout: _frame / _sidebarCol class
+ *                   selectors, the public data-windows-titlebar marker, the
+ *                   published --dsh-windows-content-radius variable, and a
+ *                   page-wide inventory that fails when any OTHER package
+ *                   ships a *_frame / *_sidebarCol class selector (a new
+ *                   false-positive surface for the ADR-0009 selectors)
  *
  * Runtime resolution: $DSH_RUNTIME_ROOT, else ~/.local/share/dsh-runtime.
- * No runtime installed → yellow skip, exit 0 (CI has no runtime; absence is
- * not a code defect). Runtime present but drifted → exit 1.
+ * Two layouts are understood: the pnpm store (`node_modules/.pnpm/
+ * @deepseek-ai+dsh-*@…`) and the direct desktop-asar form
+ * (`node_modules/@deepseek-ai/dsh-*` — point $DSH_RUNTIME_ROOT at an
+ * extracted asar's dsh/ directory). Neither layout installed → yellow skip,
+ * exit 0 (CI has no runtime; absence is not a code defect). Runtime present
+ * but drifted → exit 1.
+ *
+ * Judging modes: the pnpm store is the WEB runtime the ADR-0006 exact hashes
+ * were derived from → strict mode (hashes are hard requirements). The direct
+ * asar layout is the desktop app's OWN frontend build — its css-modules
+ * hashes differ per release, so it runs structural mode (single-bubble
+ * inventories + container classes must hold; exact hashes are reported, not
+ * required; the page-wide bubble whitelist is the runtime's own observed
+ * families). The ADR-0007/0009 shell/overlay hooks are structural local
+ * names in both modes and are judged identically.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -51,43 +72,74 @@ const RESET = process.stderr.isTTY ? "\x1b[0m" : "";
 
 const runtimeRoot = process.env.DSH_RUNTIME_ROOT || join(homedir(), ".local/share/dsh-runtime");
 const pnpmDir = join(runtimeRoot, "node_modules/.pnpm");
+const directDir = join(runtimeRoot, "node_modules/@deepseek-ai");
 
-if (!existsSync(pnpmDir)) {
+if (!existsSync(pnpmDir) && !existsSync(directDir)) {
 	console.error(`${YELLOW}upstream-hooks: no DSH runtime at ${runtimeRoot} — skipping (set DSH_RUNTIME_ROOT to override)${RESET}`);
 	process.exit(0);
 }
 
 // Collect lib/*.js of every installed @deepseek-ai package, keyed by package
 // name (pnpm dir "@deepseek-ai+dsh-client-ui-chat@0.1.2-rc.1_..." →
+// node_modules/@deepseek-ai/dsh-client-ui-chat/lib, or the direct asar form
 // node_modules/@deepseek-ai/dsh-client-ui-chat/lib).
 const packages = new Map(); // name -> [file paths]
-for (const entry of readdirSync(pnpmDir)) {
-	if (!entry.startsWith("@deepseek-ai+dsh-")) continue;
-	const pkg = entry.slice("@deepseek-ai+".length, entry.indexOf("@", entry.indexOf("+")));
-	const libDir = join(pnpmDir, entry, "node_modules/@deepseek-ai", pkg, "lib");
-	if (!existsSync(libDir)) continue;
+const addPackage = (pkg, libDir) => {
+	if (!existsSync(libDir)) return;
 	const files = readdirSync(libDir).filter((f) => f.endsWith(".js")).map((f) => join(libDir, f));
-	if (files.length > 0) packages.set(pkg, files);
+	if (files.length === 0) return;
+	if (!packages.has(pkg)) packages.set(pkg, []);
+	packages.get(pkg).push(...files);
+};
+if (existsSync(pnpmDir)) {
+	for (const entry of readdirSync(pnpmDir)) {
+		if (!entry.startsWith("@deepseek-ai+dsh-")) continue;
+		const pkg = entry.slice("@deepseek-ai+".length, entry.indexOf("@", entry.indexOf("+")));
+		addPackage(pkg, join(pnpmDir, entry, "node_modules/@deepseek-ai", pkg, "lib"));
+	}
+} else {
+	for (const entry of readdirSync(directDir)) {
+		if (!entry.startsWith("dsh-")) continue;
+		addPackage(entry, join(directDir, entry, "lib"));
+	}
 }
 
 const readAll = (pkg) => (packages.get(pkg) ?? []).map((f) => readFileSync(f, "utf8")).join("\n");
 const BUBBLE_TOKEN = /[A-Za-z0-9]+_bubble[A-Za-z0-9]*/g;
 const problems = [];
 
+// Judging mode. The ADR-0006 exact hashes were derived from the WEB runtime
+// (pnpm store). The desktop app bundles its own frontend build whose
+// css-modules hashes differ per release (2026-10-11 audit of the 0.2.0-rc.2
+// desktop asar: chat=cJsG2q_bubble, goal=ja1rG_bubble — the exact-hash branch
+// never matched there; the structural branch carries the desktop). So: pnpm
+// store → strict mode (hashes are hard requirements); direct asar layout →
+// structural mode (single-bubble inventories + containers, observed hashes
+// reported, never required).
+const directAsarLayout = !existsSync(pnpmDir);
+
 // --- manifest checks -------------------------------------------------------
 const chat = readAll("dsh-client-ui-chat");
 if (chat === "") {
 	problems.push("dsh-client-ui-chat is not installed under the runtime — the DOM-hook manifest cannot be evaluated (layout change?)");
 } else {
-	// 1. exact-hash branch
-	if (!chat.includes("Sixlwa_bubble")) {
-		problems.push('exact-hash branch dead: "Sixlwa_bubble" no longer in dsh-client-ui-chat — re-derive the hash and update src/client/skins/* (ADR-0006)');
-	}
-	// 2. structural-branch preconditions
+	// 1. exact-hash branch (strict/web mode only)
 	const chatBubbles = [...new Set(chat.match(BUBBLE_TOKEN) ?? [])];
-	if (chatBubbles.length !== 1 || chatBubbles[0] !== "Sixlwa_bubble") {
-		problems.push(`chat module *_bubble inventory is [${chatBubbles.join(", ")}], expected exactly [Sixlwa_bubble] — the structural branch's "the only _bubble under userStack is the user bubble" premise needs re-review (ADR-0006)`);
+	if (!directAsarLayout) {
+		if (!chat.includes("Sixlwa_bubble")) {
+			problems.push('exact-hash branch dead: "Sixlwa_bubble" no longer in dsh-client-ui-chat — re-derive the hash and update src/client/skins/* (ADR-0006)');
+		}
+		if (chatBubbles.length !== 1 || chatBubbles[0] !== "Sixlwa_bubble") {
+			problems.push(`chat module *_bubble inventory is [${chatBubbles.join(", ")}], expected exactly [Sixlwa_bubble] — the structural branch's "the only _bubble under userStack is the user bubble" premise needs re-review (ADR-0006)`);
+		}
+	} else {
+		// structural mode (desktop asar): the fallback branch must stand alone.
+		console.error(`${YELLOW}upstream-hooks: desktop build bubble hashes [${chatBubbles.join(", ")}] — exact-hash branch not expected to match here (ADR-0006)${RESET}`);
+		if (chatBubbles.length !== 1) {
+			problems.push(`chat module *_bubble inventory is [${chatBubbles.join(", ")}], expected exactly one — the structural branch's "the only _bubble under userStack is the user bubble" premise needs re-review (ADR-0006)`);
+		}
 	}
+	// 2. structural-branch preconditions (both modes)
 	if (!/[A-Za-z0-9]*userStack/.test(chat)) {
 		problems.push('structural branch dead: no *userStack* class in dsh-client-ui-chat — the "userStack > bubble" DOM shape changed (ADR-0006)');
 	}
@@ -98,8 +150,15 @@ const goal = readAll("dsh-client-ui-goal");
 if (goal === "") {
 	problems.push("dsh-client-ui-goal is not installed under the runtime — the goal-bubble hook manifest cannot be evaluated (layout change?)");
 } else {
-	if (!goal.includes("oRe1gG_bubble")) {
-		problems.push('goal exact-hash branch dead: "oRe1gG_bubble" no longer in dsh-client-ui-goal — re-derive the hash and update src/client/skins/* (ADR-0006 amendment)');
+	const goalBubbles = [...new Set(goal.match(BUBBLE_TOKEN) ?? [])];
+	if (!directAsarLayout) {
+		if (!goal.includes("oRe1gG_bubble")) {
+			problems.push('goal exact-hash branch dead: "oRe1gG_bubble" no longer in dsh-client-ui-goal — re-derive the hash and update src/client/skins/* (ADR-0006 amendment)');
+		}
+	} else {
+		if (goalBubbles.length !== 1) {
+			problems.push(`goal module *_bubble inventory is [${goalBubbles.join(", ")}], expected exactly one — the "stack > bubble" structural premise needs re-review (ADR-0006 amendment)`);
+		}
 	}
 	if (!/[A-Za-z0-9]*_stack/.test(goal)) {
 		problems.push('goal structural branch dead: no *_stack container class in dsh-client-ui-goal — the "stack > bubble" DOM shape changed (ADR-0006 amendment)');
@@ -110,6 +169,9 @@ if (goal === "") {
 // ROF66W_bubble (0.2.0-rc.2 audit): user-questions QuestionReplyView reply
 // bubble — themed via --dsw-specific-bubble, its container local name is
 // `_row`, so branch 2 ([class*="userStack"] > …) can never sweep it.
+// Structural mode (desktop asar) swaps the fixed whitelist for the runtime's
+// OWN observed chat/goal/reply families: extra families are still a
+// structural-premise break, "vanished" pins are a web-runtime notion only.
 const BUBBLE_WHITELIST = new Set(["Sixlwa_bubble", "oRe1gG_bubble", "ROF66W_bubble"]);
 const foundBubbles = new Map(); // token -> Set<pkg>
 for (const [pkg, files] of packages) {
@@ -120,14 +182,31 @@ for (const [pkg, files] of packages) {
 		}
 	}
 }
-for (const [token, pkgs] of foundBubbles) {
-	if (!BUBBLE_WHITELIST.has(token)) {
-		problems.push(`new *_bubble class ${token} in ${[...pkgs].join(", ")} — new false-positive surface for [class*="_bubble"], re-review the ADR-0006 selectors`);
+if (directAsarLayout) {
+	// Structural mode: the runtime's own chat/goal families plus the reviewed
+	// user-questions reply bubble (web pin ROF66W_bubble; desktop builds ship
+	// the same module under a per-build hash, e.g. v1fjQa_bubble) — its
+	// container local name `_row` keeps it out of both structural sweeps.
+	const structuralBubbles = new Set([
+		...(chat.match(BUBBLE_TOKEN) ?? []),
+		...(goal.match(BUBBLE_TOKEN) ?? []),
+		...(readAll("dsh-client-ui-user-questions").match(BUBBLE_TOKEN) ?? []),
+	]);
+	for (const [token, pkgs] of foundBubbles) {
+		if (!structuralBubbles.has(token)) {
+			problems.push(`new *_bubble class ${token} in ${[...pkgs].join(", ")} — new false-positive surface for [class*="_bubble"], re-review the ADR-0006 selectors`);
+		}
 	}
-}
-for (const token of BUBBLE_WHITELIST) {
-	if (!foundBubbles.has(token)) {
-		problems.push(`whitelisted bubble class ${token} vanished from the runtime — update BUBBLE_WHITELIST (ADR-0006 manifest)`);
+} else {
+	for (const [token, pkgs] of foundBubbles) {
+		if (!BUBBLE_WHITELIST.has(token)) {
+			problems.push(`new *_bubble class ${token} in ${[...pkgs].join(", ")} — new false-positive surface for [class*="_bubble"], re-review the ADR-0006 selectors`);
+		}
+	}
+	for (const token of BUBBLE_WHITELIST) {
+		if (!foundBubbles.has(token)) {
+			problems.push(`whitelisted bubble class ${token} vanished from the runtime — update BUBBLE_WHITELIST (ADR-0006 manifest)`);
+		}
 	}
 }
 
@@ -167,9 +246,13 @@ for (const [pkg, anchors, label] of SERVICE_API_ANCHORS) {
 // structural local names that live in the web-frontend stylesheet, not in
 // lib/*.js — resolved from the dsh-web-frontend package's dist/assets.
 const frontendDir = (() => {
-	const entry = readdirSync(pnpmDir).find((e) => e.startsWith("@deepseek-ai+dsh-web-frontend@"));
-	if (!entry) return null;
-	return join(pnpmDir, entry, "node_modules/@deepseek-ai/dsh-web-frontend/dist/assets");
+	if (existsSync(pnpmDir)) {
+		const entry = readdirSync(pnpmDir).find((e) => e.startsWith("@deepseek-ai+dsh-web-frontend@"));
+		if (!entry) return null;
+		return join(pnpmDir, entry, "node_modules/@deepseek-ai/dsh-web-frontend/dist/assets");
+	}
+	const direct = join(directDir, "dsh-web-frontend/dist/assets");
+	return existsSync(direct) ? direct : null;
 })();
 if (!frontendDir || !existsSync(frontendDir)) {
 	console.error(`upstream-hooks: frontend dist not found under the runtime — ADR-0007 CSS-hook checks skipped`);
@@ -212,10 +295,71 @@ if (!frontendDir || !existsSync(frontendDir)) {
 	}
 }
 
+// 7. shell-frame surface hooks (ADR-0009): the Windows-Desktop single-paint
+// alignment pins structural css-modules local names shipped by
+// dsh-client-ui-layout's AppFrame. Class-selector-shaped checks only, so JS
+// identifiers can never trip them.
+const layout = readAll("dsh-client-ui-layout");
+if (layout === "") {
+	problems.push("dsh-client-ui-layout is not installed under the runtime — the shell-frame hook manifest cannot be evaluated (layout change?)");
+} else {
+	if (!layout.includes("data-windows-titlebar")) {
+		problems.push('shell-frame hook dead: "data-windows-titlebar" no longer in dsh-client-ui-layout — the public Desktop marker drifted (ADR-0009)');
+	}
+	for (const name of ["frame", "sidebarCol"]) {
+		if (!new RegExp(`\\.[A-Za-z0-9]+_${name}[{,:\\[.]`).test(layout)) {
+			problems.push(`shell-frame hook dead: no .*_${name} class selector in dsh-client-ui-layout — the AppFrame local name drifted, re-derive the ADR-0009 selectors`);
+		}
+	}
+	if (!layout.includes("--dsh-windows-content-radius")) {
+		problems.push('shell-frame contract dead: "--dsh-windows-content-radius" no longer published by dsh-client-ui-layout — the 16px content-radius contract drifted (ADR-0009)');
+	}
+}
+// Page-wide inventory: [class*="_frame"] / [class*="_sidebarCol"] must only
+// ever match the AppFrame pair. Any OTHER package shipping a *_frame /
+// *_sidebarCol class selector is a new false-positive surface and forces a
+// re-review instead of silently widening the selectors.
+const SHELL_LOCAL_NAMES = ["frame", "sidebarCol"];
+const shellInventory = new Map(); // local name -> Set<pkg>
+for (const name of SHELL_LOCAL_NAMES) {
+	const pattern = new RegExp(`\\.[A-Za-z0-9]+_${name}[{,:\\[.]`);
+	const found = new Set();
+	for (const [pkg, files] of packages) {
+		for (const file of files) {
+			if (pattern.test(readFileSync(file, "utf8"))) found.add(pkg);
+		}
+	}
+	shellInventory.set(name, found);
+	// Reviewed false-positive surfaces (2026-10-11, 0.2.0-rc.2 desktop asar +
+	// web runtime): five more packages ship their own `.<hash>_frame` panels.
+	// They can never match the ADR-0009 selectors — rule 1 requires a DIRECT
+	// [class*="_sidebarCol"] child (:has anchor), rule 2 targets only the
+	// parent of a _sidebarCol, and _sidebarCol stays unique to the AppFrame
+	// (its own inventory below). A package appearing here without a guard
+	// entry is still a hard fail; entries record the reviewed set.
+	const reviewed = name === "frame"
+		? new Set([
+			"dsh-client-ui-layout",
+			"dsh-client-ui-chat",
+			"dsh-client-ui-sidebar-browser",
+			"dsh-client-ui-sidebar-documentpreview",
+			"dsh-client-ui-subagent",
+			"dsh-client-ui-user-questions",
+		])
+		: new Set(["dsh-client-ui-layout"]);
+	const unexpected = [...found].filter((pkg) => !reviewed.has(pkg));
+	if (unexpected.length > 0) {
+		problems.push(`new *_${name} class selector in ${unexpected.join(", ")} — new false-positive surface for the ADR-0009 [class*="_${name}"] selectors, re-review them`);
+	}
+}
+
 // --- report ----------------------------------------------------------------
 if (problems.length > 0) {
 	for (const problem of problems) console.error(`${RED}upstream-hooks: ${problem}${RESET}`);
 	process.exit(1);
 }
 const bubbles = [...foundBubbles.keys()].sort().join(", ");
-console.log(`✓ upstream hooks OK: Sixlwa_bubble alive; chat *_bubble = [Sixlwa_bubble]; userStack alive; goal oRe1gG_bubble + _stack alive; page *_bubble = {${bubbles}}; dark attr alive; service-API anchors alive; overlay hooks alive (_float_/_dialog_/_float* whitelist/mask+menu tokens) (${packages.size} @deepseek-ai packages scanned)`);
+const bubbleSummary = directAsarLayout
+	? `desktop structural mode: single-bubble inventories + userStack/_stack containers alive; page *_bubble = {${bubbles}}`
+	: `Sixlwa_bubble alive; chat *_bubble = [Sixlwa_bubble]; userStack alive; goal oRe1gG_bubble + _stack alive; page *_bubble = {${bubbles}}`;
+console.log(`✓ upstream hooks OK: ${bubbleSummary}; dark attr alive; service-API anchors alive; overlay hooks alive (_float_/_dialog_/_float* whitelist/mask+menu tokens); shell-frame hooks alive (_frame/_sidebarCol/titlebar marker/content-radius) (${packages.size} @deepseek-ai packages scanned)`);

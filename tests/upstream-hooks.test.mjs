@@ -1,8 +1,9 @@
 /**
- * Repo-side static pins for the bubble-decoration hook (ADR-0006): the built
- * client must carry the union selector in all shipped skins (light + dark) and
- * must never re-pin the dead rc.2 hash. Runtime-side hook drift is covered by
- * scripts/verify-upstream-hooks.mjs; this file pins the repo side.
+ * Repo-side static pins for the bubble-decoration hook (ADR-0006) and the
+ * shell-frame alignment (ADR-0009): the built client must carry those
+ * selectors exactly as designed and must never re-pin a dead hash. Runtime-side
+ * hook drift is covered by scripts/verify-upstream-hooks.mjs; this file pins
+ * the repo side.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -27,6 +28,17 @@ test("Desktop backdrop bundle carries the public marker and all stable skin scop
     assert.ok(client.includes(attribute), `built client is missing skin scope ${attribute}`);
   }
   assert.ok(!client.includes(".centerCol"), "Desktop styling must not depend on a Host CSS Modules class");
+});
+
+test("shell-frame alignment ships exactly once, marker-gated, structural local names only (ADR-0009)", () => {
+  const STRIP = 'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}';
+  const COLUMN = 'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}';
+  // Runtime-level emission: one copy for all skins, mounted per skin at runtime.
+  assert.equal(client.split(STRIP).length - 1, 1, "caption-strip single-paint rule");
+  assert.equal(client.split(COLUMN).length - 1, 1, "sidebar-column single-paint rule");
+  // ADR-0006 doctrine: exact hashed pins are banned; structural local names
+  // ([class*="_local"]) are allowed and pinned by scripts/verify-upstream-hooks.mjs.
+  assert.ok(!/[A-Za-z0-9]{2,}_(frame|sidebarCol)/.test(client), "a hashed host class got pinned — that is the ADR-0006 failure mode");
 });
 
 test("bubble decoration: the dead rc.2 hash gdEzaW must never return", () => {
