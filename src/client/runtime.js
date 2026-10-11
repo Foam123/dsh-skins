@@ -32,13 +32,13 @@ function datasetAttribute(key) {
 // scripts/verify-upstream-hooks.mjs (#7) fails `check` when those local names
 // or the painted-token line drift.
 const SHELL_ALIGNMENT_CSS = [
-  "// dsh-skins shell-frame single-paint alignment (ADR-0009)",
+  "/* dsh-skins shell-frame single-paint alignment (ADR-0009) */",
   'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
   'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
   'html[data-windows-titlebar] [class*="_sidebarCol"] > [class*="_root"]{background:0 0}',
 ].join("\n");
 
-// -- Windows caption probe alignment (ADR-0009 v2) ---------------------------
+// -- Windows caption probe alignment (ADR-0009 v2/v3) ------------------------
 // The win32 preload paints the native caption-button overlay (WCO) with the
 // computed backgroundColor of a hidden probe span it appends to the body,
 // styled `background-color:var(--dsw-specific-sidebar-fill)`, and re-sends on
@@ -46,14 +46,19 @@ const SHELL_ALIGNMENT_CSS = [
 // A translucent skin fill reaches that native surface without its wallpaper
 // backdrop, so the buttons render as an opaque rectangle in the fill's base
 // color. Feed the probe the OPAQUE composite of the fill over the wallpaper's
-// top-right region instead: a stylesheet `!important` beats the probe's
-// inline declaration, the preload observer picks the change up automatically,
-// and removing the style tag reverts to the host fallback. The composite is
+// strip band instead: a stylesheet `!important` beats the probe's inline
+// declaration, the preload observer picks the change up automatically, and
+// removing the style tag reverts to the host fallback. The composite is
 // correct whether the platform honors or ignores overlay alpha, because the
-// emitted color is always fully opaque. The probe hook is structural
-// (`span[style*="--dsw-specific-sidebar-fill"]`) but lives in the desktop
-// preload, not in the scanned runtime — a preload rework shows up as a visual
-// regression, re-derive there (no static guard possible).
+// emitted color is always fully opaque. v3 field fixes (CDP-verified on the
+// 0.2.0-rc.2 desktop): emitted CSS must use star-star comments — CSS has no
+// line comments and a leading `//` makes the parser swallow the FIRST rule
+// of the block; the tag must mount unconditionally because the titlebar
+// marker can appear after the skin mounts; and the sampler must reproduce
+// the cover crop at the live viewport plus the skin scrim. The probe hook is
+// structural (`span[style*="--dsw-specific-sidebar-fill"]`) but lives in the
+// desktop preload, not in the scanned runtime — a preload rework shows up as
+// a visual regression, re-derive there (no static guard possible).
 const CAPTION_PROBE_SELECTOR = 'span[style*="--dsw-specific-sidebar-fill"]';
 
 function parseRgbaChannels(value) {
@@ -72,18 +77,33 @@ function compositeOverBackdrop(fill, backdrop) {
 
 function buildCaptionCss(composites) {
   return [
-    "// dsh-skins caption probe alignment (ADR-0009 v2)",
+    "/* dsh-skins caption probe alignment (ADR-0009 v2) */",
     `body:not([data-ds-dark-theme]) > ${CAPTION_PROBE_SELECTOR}{background-color:${composites.light}!important}`,
     `body[data-ds-dark-theme] > ${CAPTION_PROBE_SELECTOR}{background-color:${composites.dark}!important}`,
   ].join("\n");
 }
 
-// The buttons sample the wallpaper where they sit (top-right); a 32px
-// thumbnail approximates the runtime's blur, which preserves the local mean.
-const CAPTION_SAMPLE_SIZE = 32;
+// The buttons sit in the strip's top-right, so the sample is the wallpaper's
+// strip band mapped through the cover transform at the CURRENT viewport (the
+// art is cropped by cover, so raw-image coordinates would sample the wrong
+// region), then the skin's own scrim gradient and the fill base (as the floor
+// under any art alpha) are applied — reproducing exactly what the web paints
+// behind the buttons. The 32px thumbnail stands in for the runtime's blur,
+// which preserves the local mean.
+const CAPTION_SAMPLE_WIDTH = 32;
+const CAPTION_SAMPLE_HEIGHT = 12;
 const backdropSampleCache = new Map(); // url -> Promise<{r,g,b}|null>
 
-async function sampleBackdropTopRight(url) {
+function parseScrimStops(spec) {
+  const match = /^linear-gradient\(rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)\s+0%,\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)\s+100%\)/.exec(spec ?? "");
+  if (match === null) return null;
+  return {
+    from: { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]), a: Number(match[4]) },
+    to: { r: Number(match[5]), g: Number(match[6]), b: Number(match[7]), a: Number(match[8]) },
+  };
+}
+
+async function sampleBackdropStrip(url, fill) {
   if (typeof Image === "undefined") return null;
   const image = new Image();
   image.src = url;
@@ -93,15 +113,40 @@ async function sampleBackdropTopRight(url) {
     return null; // broken/cross-tainted asset: fail closed, no override
   }
   const canvas = document.createElement("canvas");
-  canvas.width = CAPTION_SAMPLE_SIZE;
-  canvas.height = CAPTION_SAMPLE_SIZE;
+  canvas.width = CAPTION_SAMPLE_WIDTH;
+  canvas.height = CAPTION_SAMPLE_HEIGHT;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (context === null) return null;
-  context.drawImage(image, 0, 0, CAPTION_SAMPLE_SIZE, CAPTION_SAMPLE_SIZE);
-  const x0 = Math.round(CAPTION_SAMPLE_SIZE * 0.6);
-  const height = Math.round(CAPTION_SAMPLE_SIZE * 0.3);
-  const width = CAPTION_SAMPLE_SIZE - x0;
-  const region = context.getImageData(x0, 0, width, height).data;
+  // Opaque floor in the fill's own color: any art alpha now composites over
+  // the panel color instead of over whatever the native window keeps behind
+  // the page.
+  context.fillStyle = `rgb(${fill.r}, ${fill.g}, ${fill.b})`;
+  context.fillRect(0, 0, CAPTION_SAMPLE_WIDTH, CAPTION_SAMPLE_HEIGHT);
+  const viewW = typeof innerWidth === "number" ? innerWidth : 0;
+  const viewH = typeof innerHeight === "number" ? innerHeight : 0;
+  if (viewW > 0 && viewH > 0 && image.naturalWidth > 0 && image.naturalHeight > 0) {
+    const scale = Math.max(viewW / image.naturalWidth, viewH / image.naturalHeight);
+    const offX = (image.naturalWidth * scale - viewW) / 2;
+    const offY = (image.naturalHeight * scale - viewH) / 2;
+    const barHeight = parseFloat((typeof document !== "undefined"
+      ? getComputedStyle(document.documentElement).getPropertyValue("--dsh-windows-titlebar-height")
+      : "") || "") || 40;
+    context.drawImage(
+      image,
+      (viewW * 0.75 + offX) / scale,
+      offY / scale,
+      (viewW * 0.25) / scale,
+      barHeight / scale,
+      0, 0, CAPTION_SAMPLE_WIDTH, CAPTION_SAMPLE_HEIGHT,
+    );
+  } else {
+    context.drawImage(image, 0, 0, CAPTION_SAMPLE_WIDTH, CAPTION_SAMPLE_HEIGHT);
+  }
+  return { canvas, context };
+}
+
+function averageCanvas(context, width, height) {
+  const region = context.getImageData(0, 0, width, height).data;
   let r = 0, g = 0, b = 0;
   const pixels = region.length / 4;
   for (let index = 0; index < region.length; index += 4) {
@@ -112,14 +157,37 @@ async function sampleBackdropTopRight(url) {
   return { r: Math.round(r / pixels), g: Math.round(g / pixels), b: Math.round(b / pixels) };
 }
 
-function sampleBackdropCached(url) {
+async function sampleBackdropCached(url, fill, scrim) {
   if (backdropSampleCache.size > 8) backdropSampleCache.clear();
-  if (!backdropSampleCache.has(url)) backdropSampleCache.set(url, sampleBackdropTopRight(url));
+  if (!backdropSampleCache.has(url)) {
+    backdropSampleCache.set(url, (async () => {
+      const drawn = await sampleBackdropStrip(url, fill);
+      if (drawn === null) return null;
+      if (scrim !== null) {
+        const gradient = drawn.context.createLinearGradient(0, 0, 0, CAPTION_SAMPLE_HEIGHT);
+        gradient.addColorStop(0, `rgba(${scrim.from.r}, ${scrim.from.g}, ${scrim.from.b}, ${scrim.from.a})`);
+        gradient.addColorStop(1, `rgba(${scrim.to.r}, ${scrim.to.g}, ${scrim.to.b}, ${scrim.to.a})`);
+        drawn.context.fillStyle = gradient;
+        drawn.context.fillRect(0, 0, CAPTION_SAMPLE_WIDTH, CAPTION_SAMPLE_HEIGHT);
+      }
+      return averageCanvas(drawn.context, CAPTION_SAMPLE_WIDTH, CAPTION_SAMPLE_HEIGHT);
+    })());
+  }
   return backdropSampleCache.get(url);
+}
+
+function findCaptionProbe() {
+  if (typeof document === "undefined") return null;
+  for (const span of document.querySelectorAll("body > span")) {
+    if ((span.getAttribute("style") ?? "").includes("--dsw-specific-sidebar-fill")) return span;
+  }
+  return null;
 }
 
 async function alignCaptionProbe(effects, tag) {
   try {
+    const probe = findCaptionProbe();
+    if (probe === null) return; // no win32 preload probe (ordinary Web) — nothing to align
     const fills = effects.tokenOverrides?.["--dsw-specific-sidebar-fill"] ?? null;
     if (fills === null) return;
     const lightFill = parseRgbaChannels(fills.light);
@@ -129,10 +197,11 @@ async function alignCaptionProbe(effects, tag) {
     const imageDark = effects.backdrop?.imageDark ?? null;
     if (imageLight === null || imageDark === null) return;
     const [lightBackdrop, darkBackdrop] = await Promise.all([
-      sampleBackdropCached(imageLight),
-      sampleBackdropCached(imageDark),
+      sampleBackdropCached(imageLight, lightFill, parseScrimStops(imageLight)),
+      sampleBackdropCached(imageDark, darkFill, parseScrimStops(imageDark)),
     ]);
     if (lightBackdrop === null || darkBackdrop === null) return;
+    if (findCaptionProbe() === null) return; // probe vanished meanwhile (skin unmounted)
     // Commit atomically: both modes resolved, else the empty tag stays a no-op.
     tag.textContent = buildCaptionCss({
       light: compositeOverBackdrop(lightFill, lightBackdrop),
@@ -377,13 +446,13 @@ export function createSkinRuntime() {
         stops.push(() => tag.remove());
       }
 
-      // Windows caption probe alignment (ADR-0009 v2): the probe and its ipc
-      // loop only exist under the win32 preload, keyed by the same public
-      // marker. The tag is created empty and filled asynchronously by the
-      // wallpaper sampler — a failed sample keeps the empty no-op, removal
-      // reverts the overlay to the host fallback through the preload observer.
-      if (typeof document !== "undefined"
-        && document.documentElement?.hasAttribute?.("data-windows-titlebar") === true) {
+      // Windows caption probe alignment (ADR-0009 v2/v3): the tag mounts
+      // UNCONDITIONALLY — the win32 preload sets the titlebar marker around
+      // DOMContentLoaded, which can land AFTER the skin mounts, so gating on
+      // the marker here mis-times (the 1.5.3-alpha.1 field failure). On
+      // ordinary Web no probe span exists, alignCaptionProbe bails, and the
+      // empty tag is an inert no-op; teardown always removes it.
+      {
         const tag = styleTag(`dsh-skins/${skin.id}.caption.css`, "");
         stops.push(() => tag.remove());
         void alignCaptionProbe(effects, tag);
