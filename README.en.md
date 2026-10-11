@@ -1,4 +1,4 @@
-# dsh-skins — Skin pack for DSH Web
+# dsh-skins — Skin pack for DSH
 
 [![Release](https://img.shields.io/github/v/release/iasiv5/dsh-skins?label=Release&sort=semver)](../../releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/iasiv5/dsh-skins/ci.yml?branch=main&label=CI)](../../actions/workflows/ci.yml)
@@ -8,7 +8,7 @@
 
 English · [中文](./README.md)
 
-Hot-swappable brand skins for DeepSeek Harness Web — with a one-click path back to the official interface.
+Hot-swappable brand skins for DeepSeek Harness — installable on both the Web and Desktop profiles, with a one-click path back to the official interface.
 
 ![凡人修仙传 · 美人志 — factory wallpaper "Yuntai Gathering"](docs/assets/preview-meirenzhi-1.webp)
 
@@ -38,6 +38,8 @@ dsh plugin --profile web update @iasiv5/dsh-skins    # update
 dsh plugin --profile web remove @iasiv5/dsh-skins    # uninstall
 ```
 
+**DSH Desktop app**: install from the app's built-in plugin page, or run `dsh plugin --profile desktop add @iasiv5/dsh-skins`, then restart the app.
+
 With the [dsh-m](https://github.com/iasiv5/dsh-m) plugin marketplace installed, you can also install / uninstall this plugin with one click inside the DSH Web UI.
 
 <details>
@@ -55,7 +57,7 @@ If the install fails, send me the command output verbatim and retry at most once
 
 </details>
 
-## Four appearances
+## Three skins and the official look
 
 This section answers: which skins exist and what each feels like.
 
@@ -107,7 +109,7 @@ Every skin's key visuals are open to adjustment. Click the gear button on a skin
 | **Slogan** | The new-session guidance line, one Chinese and one English copy | The skin's factory slogan |
 | **Translucency** | 0–100%, one value driving three visual layers: panel tint, wallpaper scrim and blur. 0% is pure, fully visible wallpaper; 100% hides it completely | meirenzhi 35, openbmc / uefi-harness 55 |
 
-> **On the Windows Desktop app (dsh Desktop)**: the shell chrome — sidebar, caption strip, right panel and window buttons — is the **opaque skin base color** and does not follow the translucency knob; the wallpaper is exposed inside the conversation area (center column), where the knob drives surface tint, scrim and blur. The Web keeps the original fully translucent form on every surface; the two environments are independent.
+> **Desktop profile**: the shell is the solid skin base color and the wallpaper shows only inside the conversation area — see "The Desktop profile" below.
 
 ![Personalization panel — meirenzhi shown: built-in wallpaper grid, library upload, zh/en slogans and the translucency knob](docs/assets/preview-personalization.webp)
 
@@ -131,6 +133,15 @@ Every skin's key visuals are open to adjustment. Click the gear button on a skin
 - Only overrides are stored: untouched fields automatically follow the new version's defaults, and leftovers of retired skins or fields are cleaned up at load (the v1.4.0 tgcf removal rides this path).
 - A damaged state file triggers recovery mode: indexes are rebuilt and bad files quarantined — your images are never wiped.
 - Uploads pass magic-number validation and size caps; concurrent writes merge per field and never clobber each other.
+
+## The Desktop profile
+
+In the **DSH Desktop app**, the shell chrome — sidebar, caption strip, right panel and window buttons — is the **opaque skin base color** and does not follow the translucency knob; the wallpaper is exposed inside the conversation area (center column), where the knob drives surface tint, scrim and blur. The Web profile keeps the original fully translucent form on every surface; the two environments are independent.
+
+![Desktop profile — solid chrome + wallpaper in the conversation area (meirenzhi · dark)](docs/assets/preview-desktop-1.webp)
+
+- Verified with dsh Desktop `0.2.0-rc.2` (Windows); macOS / Linux Desktop currently follow the Web form and will be adapted in a later release.
+- The right panel in fullscreen is the solid skin base color; the wallpaper is not shown through it.
 
 ## The skin switcher
 
@@ -164,6 +175,9 @@ Update duty has moved to the dsh-m marketplace and the DSH CLI (ADR-0008); the s
 **Which DSH Web versions are supported?**
 Verified with DSH Web `0.2.0-rc.2`. Later rc builds of the same series are expected to work, but unverified versions carry no promise.
 
+**Is the Desktop profile supported?**
+Yes. The DSH Desktop app and the Web profile are installed independently and do not affect each other; the desktop form (solid chrome + wallpaper in the conversation area) is described under "The Desktop profile". Verified with dsh Desktop `0.2.0-rc.2` (Windows).
+
 **Does my appearance preference sync across browsers?**
 In the browser on the DSH host machine (loopback), the preference is persisted by the DSH Host and shared naturally. Other remote browsers keep the preference in their own `localStorage` — independent per browser, never overwritten.
 
@@ -175,7 +189,7 @@ Yes. Configuration and the library live in the `$DSH_HOME/dsh-skins/` data direc
 - Other skin plugins may also touch the body backdrop, brand slots or favicon; avoid enabling multiple visual skin plugins at the same time.
 - The `openbmc` brand slots reuse the OpenBMC project's official logo letterforms and brand gradient, used solely for identification; all rights remain with the OpenBMC project.
 - The `uefi-harness` mark is the UEFI Forum's official trademark (the red cube, from uefi.org's published uefi_logo_red.gif, embedded as vector paths traced via Wikimedia Commons "Logo of the UEFI Forum.svg"); it is used solely to identify the skin, and all rights remain with the UEFI Forum.
-- Windows Desktop known limits: after the right panel is closed/collapsed, the host keeps a reserved empty track (it shows the shell's dark base color and the conversation area does not expand) — host layout behavior, outside skin control; the fullscreen right panel is the solid skin base color without wallpaper blur (blurring would smear the panel's own contents, so it is intentionally omitted).
+- Windows Desktop known limits: the fullscreen right panel is the solid skin base color; the wallpaper is not shown through it.
 
 ## License
 

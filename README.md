@@ -1,4 +1,4 @@
-# dsh-skins — DSH Web 多皮肤插件
+# dsh-skins — DSH 多皮肤插件
 
 [![Release](https://img.shields.io/github/v/release/iasiv5/dsh-skins?label=Release&sort=semver)](../../releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/iasiv5/dsh-skins/ci.yml?branch=main&label=CI)](../../actions/workflows/ci.yml)
@@ -8,7 +8,7 @@
 
 [English](./README.en.md) · 中文
 
-为 DeepSeek Harness Web 换上可热切换的品牌皮肤，随时一键回到官方界面。
+为 DeepSeek Harness 换上可热切换的品牌皮肤——Web 与 Desktop 两种 profile 均可安装使用，随时一键回到官方界面。
 
 ![凡人修仙传 · 美人志 — 内置默认壁纸「云台雅集」](docs/assets/preview-meirenzhi-1.webp)
 
@@ -38,6 +38,8 @@ dsh plugin --profile web update @iasiv5/dsh-skins    # 更新
 dsh plugin --profile web remove @iasiv5/dsh-skins    # 卸载
 ```
 
+**DSH Desktop 应用**：在应用自带的插件页安装，或执行 `dsh plugin --profile desktop add @iasiv5/dsh-skins`，重启应用后生效。
+
 安装了 [dsh-m](https://github.com/iasiv5/dsh-m) 插件市场的话，也可以直接在 DSH Web 界面里一键安装 / 卸载本插件。
 
 <details>
@@ -55,7 +57,7 @@ dsh plugin --profile web remove @iasiv5/dsh-skins    # 卸载
 
 </details>
 
-## 四款外观
+## 三款皮肤与官方界面
 
 本节回答：有哪些皮肤、各是什么气质。
 
@@ -107,7 +109,7 @@ dsh plugin --profile web remove @iasiv5/dsh-skins    # 卸载
 | **标语** | 新会话页的引导语，中文、英文各一份 | 皮肤出厂标语 |
 | **通透度** | 0–100% 单值联动三个视觉层：面板底色、壁纸遮罩、模糊。0% 纯壁纸完全透出，100% 完全遮蔽 | meirenzhi 35，openbmc / uefi-harness 55 |
 
-> **Windows Desktop（dsh Desktop 应用）上的形态**：桌面端外壳——侧栏、顶栏条、右栏面板与窗口按钮——为**不透明的皮肤本色**，不随通透度变化；壁纸在会话区（内容列）显露，通透度联动会话区内的表面底色、遮罩与模糊。Web 端维持全表面透纱的原有形态，两端互不影响。
+> **Desktop profile**：外壳为实色皮肤本色、壁纸只在会话区显露——详见下方「Desktop profile 上的形态」。
 
 ![个性化面板 — 以美人志为例：内置壁纸网格、图库上传、中英标语与通透度旋钮](docs/assets/preview-personalization.webp)
 
@@ -131,6 +133,15 @@ dsh plugin --profile web remove @iasiv5/dsh-skins    # 卸载
 - 配置只存「改过什么」：未改动的字段自动跟随新版本的默认值，已下线皮肤或字段的残留会在加载时自动清理（v1.4.0 移除 tgcf 皮肤即走这条路径）。
 - 配置文件损坏时进入恢复模式：只重建索引、隔离坏文件，绝不清除你的图片。
 - 上传走魔数校验与尺寸上限；并发写入按字段合并，互不覆盖。
+
+## Desktop profile 上的形态
+
+**DSH Desktop 应用**中，外壳——侧栏、顶栏条、右栏面板与窗口按钮——为**不透明的皮肤本色**，不随通透度变化；壁纸在会话区（内容列）显露，通透度联动会话区内的表面底色、遮罩与模糊。Web profile 维持全表面透纱的原有形态，两端互不影响。
+
+![Desktop profile — 实色外壳 + 会话区壁纸（美人志 · 深色）](docs/assets/preview-desktop-1.webp)
+
+- 已在 dsh Desktop `0.2.0-rc.2`（Windows）验证；macOS / Linux Desktop 当前跟随 Web 形态，后续版本适配。
+- 右栏面板全屏时为实色皮肤底、不透出壁纸；面板「收起/关闭」后的空轨道行为属宿主布局。
 
 ## 皮肤切换器
 
@@ -164,6 +175,9 @@ URL 也能切皮肤：`/?skin=official`、`/?skin=openbmc`、`/?skin=uefi-harnes
 **支持哪些 DSH Web 版本？**
 已使用 DSH Web `0.2.0-rc.2` 验证。同系列 rc 版本理论上兼容，未经验证的版本不作承诺。
 
+**支持 Desktop profile 吗？**
+支持。DSH Desktop 应用与 Web profile 各自独立安装、互不影响；桌面形态（实色外壳 + 会话区壁纸）见「Desktop profile 上的形态」。已使用 dsh Desktop `0.2.0-rc.2`（Windows）验证。
+
 **外观偏好在不同的浏览器间同步吗？**
 在 DSH 所在机器的浏览器（loopback）上，偏好由 DSH Host 持久化，天然共享。其他远程浏览器由插件将偏好存入本地 `localStorage`，各浏览器独立、互不覆盖。
 
@@ -175,7 +189,7 @@ URL 也能切皮肤：`/?skin=official`、`/?skin=openbmc`、`/?skin=uefi-harnes
 - 其他皮肤插件也可能修改 body 背景、品牌位或 favicon；应避免同时启用多个视觉皮肤插件。
 - `openbmc` 的品牌位沿用 OpenBMC 项目官方 logo 的字标字形与品牌渐变色，仅作标识用途，权利归 OpenBMC 项目所有。
 - `uefi-harness` 的标志为 UEFI Forum 官方商标（红色立方体，源自 uefi.org 发布的 uefi_logo_red.gif，经 Wikimedia Commons「Logo of the UEFI Forum.svg」矢量描摹嵌入），仅作标识用途，权利归 UEFI Forum 所有。
-- Windows Desktop 已知边界：右栏面板「收起/关闭」后，宿主保留一条空轨道（显示外壳深色底，会话区不扩展）——宿主布局行为，非皮肤可控；全屏面板为实色皮肤底、不带壁纸模糊（会模糊面板内全部内容，故不做）。
+- Windows Desktop 已知边界：全屏的右栏面板为实色皮肤底，不透出壁纸。
 
 ## License
 
