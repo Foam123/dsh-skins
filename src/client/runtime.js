@@ -46,12 +46,11 @@ function parseRgbaChannels(value) {
 /**
  * Build the desktop shell alignment CSS for one skin: the three
  * single-paint rules, the opaque shell-fill token override (light and dark),
- * and the wallpaper-in-content rules — the center column carries the same
- * scrim+art backdrop the Web paints on body::before, so the conversation
- * area keeps the skin's wallpaper while the chrome (strip, sidebar, notch,
- * WCO buttons) stays one solid skin color. `opaqueFills`/`backdrop` may be
- * null when the skin ships no fill override or no backdrop — the respective
- * rules are then skipped.
+ * the wallpaper-in-content rules (the center column carries the same
+ * scrim+art backdrop the Web paints on body::before), and the dockkit pane
+ * rules (fullscreen panels get the opaque shell color). `opaqueFills`/
+ * `backdrop` may be null when the skin ships no fill override or no
+ * backdrop — the respective rules are then skipped.
  */
 function buildShellAlignmentCss(bodyAttribute, opaqueFills, backdrop) {
   const body = `body[${datasetAttribute(bodyAttribute)}]`;
@@ -83,6 +82,15 @@ function buildShellAlignmentCss(bodyAttribute, opaqueFills, backdrop) {
     lines.push(
       `${scoped} [data-rightbar-col] > *{background-color:${opaqueFills.light}!important}`,
       `${scoped}[data-ds-dark-theme] [data-rightbar-col] > *{background-color:${opaqueFills.dark}!important}`,
+    );
+    // Fullscreen dockkit panes (right panel "fullscreen", floats) tab over
+    // the conversation area with fully transparent chrome containers; give
+    // the pane surface the opaque shell color so chat text never bleeds
+    // through. The dockkit pane class lives in the frontend dist stylesheet
+    // and is pinned by verify-upstream-hooks.mjs.
+    lines.push(
+      `${scoped} [class*="_pane_"]{background:${opaqueFills.light}!important}`,
+      `${scoped}[data-ds-dark-theme] [class*="_pane_"]{background:${opaqueFills.dark}!important}`,
     );
   }
   return lines.join("\n");

@@ -45,6 +45,8 @@ test("shell-frame alignment ships exactly once, marker-gated, structural local n
   assert.ok(client.includes("${scoped}[data-ds-dark-theme]{--dsw-specific-sidebar-fill:"), "dark variant of the opaque token override ships");
   assert.ok(client.includes('!important}'), "the token override must stay !important (beats the theme's published value)");
   assert.ok(client.includes('[class*="_centerCol"]'), "wallpaper-in-content rules ship (v6)");
+  assert.ok(client.includes('[data-rightbar-col] > *{background-color:'), "right-panel solid backing ships (v7)");
+  assert.ok(client.includes('[class*="_pane_"]'), "dockkit pane rules ship (v7)");
   assert.ok(!client.includes("caption.css"), "the caption sampler machinery is gone (superseded by the opaque token)");
   // ADR-0006 doctrine: exact hashed pins are banned; structural local names
   // ([class*="_local"]) are allowed and pinned by scripts/verify-upstream-hooks.mjs.

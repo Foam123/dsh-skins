@@ -265,6 +265,11 @@ if (!frontendDir || !existsSync(frontendDir)) {
 	if (!/\._float_[A-Za-z0-9]+_\d+\{/.test(css)) {
 		problems.push('overlay hook dead: "._float_<hash>" no longer in dsh-web-frontend dist CSS — the dockkit float shell class drifted, re-derive [class*="_float_"] (ADR-0007)');
 	}
+	// 6a-2. the dockkit pane surface (ADR-0009 v7): the fullscreen right
+	// panel's opaque backing targets [class*="_pane_"] in the dockkit css.
+	if (!/\._pane_[A-Za-z0-9]+_\d+\{/.test(css)) {
+		problems.push('overlay hook dead: "._pane_<hash>" no longer in dsh-web-frontend dist CSS — the dockkit pane class drifted, re-derive the ADR-0009 v7 [class*="_pane_"] rule');
+	}
 	// 6b. the host dialog local name (v2 selector b)
 	if (!/\._dialog_[A-Za-z0-9]+_\d+\{/.test(css)) {
 		problems.push('overlay hook dead: "._dialog_<hash>" no longer in dsh-web-frontend dist CSS — the host dialog class drifted, re-derive [class*="_dialog_"] (ADR-0007)');
