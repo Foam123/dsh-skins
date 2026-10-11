@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { createPersonalizationPanel, PANEL_CSS } from "../src/client/personalization/panel.js";
+import { DICTS } from "../src/client/dicts.js";
 import { getSkinSchema } from "../src/shared/personalization/catalog.js";
 import { createFakeReact, jsx, flatten, findButton } from "./fake-react.mjs";
 
@@ -242,14 +243,46 @@ test("恢复默认 confirms with the affected field list; decline is a no-op (us
   assert.equal(panel.configClient.calls.previewReset.length, getSkinSchema("meirenzhi").fields.length, "decline resets nothing");
 });
 
+test("Desktop reset highlights exactly the affected fields as individual semantic tags", async () => {
+  const config = makeConfigClient({ skins: { meirenzhi: {
+    wallpaper: "builtin:meirenzhi:mupeiling",
+    slogan: { zh: "改过的标语", en: "Custom slogan" },
+    panelOpacity: 68,
+  } } });
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  findButton(panel.tree(), "personalization.reset").props.onClick();
+  await tick();
+  const dialog = dialogOf(panel);
+  const tags = flatten(dialog).filter((node) => node.type === "li" && node.props.className === "dsh-skins-pz-dialog-tag");
+  assert.equal(dialog.open, true);
+  assert.deepEqual(tags.map((node) => node.props.children), [
+    "personalization.wallpaper", "personalization.slogan", "personalization.panelTranslucency",
+  ], "three catalog-ordered tags, never one comma-delimited text selection");
+  assert.equal(flatten(dialog).find((node) => node.type === "ul")?.props.className, "dsh-skins-pz-dialog-tags");
+  assert.ok(textsOf(dialog).includes("personalization.resetConfirmIntro"));
+  assert.ok(textsOf(dialog).includes("personalization.resetConfirmOutro"));
+  assert.equal(config.calls.flushNow, 0, "highlighting a field does not reset it");
+  await cancelDialog(panel);
+  assert.equal(config.calls.flushNow, 0);
+
+  const one = mountPanel({ skinId: "meirenzhi", config: makeConfigClient({ skins: { meirenzhi: { panelOpacity: 68 } } }) });
+  await tick();
+  findButton(one.tree(), "personalization.reset").props.onClick();
+  await tick();
+  assert.deepEqual(flatten(dialogOf(one)).filter((node) => node.type === "li").map((node) => node.props.children),
+    ["personalization.panelTranslucency"], "only overridden fields receive tags");
+});
+
 test("Web profile keeps native reset confirmation and never mounts the HTML dialog", async () => {
   const config = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 66 } } });
-  const web = mountPanel({ skinId: "meirenzhi", config, desktop: false });
+  const web = mountPanel({ skinId: "meirenzhi", config, desktop: false, translations: DICTS.zh });
   await tick();
-  findButton(web.tree(), "personalization.reset").props.onClick();
+  findButton(web.tree(), DICTS.zh["personalization.reset"]).props.onClick();
   await tick();
   assert.equal(web.confirms.length, 1, "Web still calls window.confirm once");
-  assert.ok(web.confirms[0].includes("personalization.panelTranslucency"));
+  assert.equal(web.confirms[0], "以下设置将恢复为出厂默认：\n\n• 通透度 Transparency\n\n此操作立即生效，确认继续吗？",
+    "Web native confirmation shows one affected field on its own bullet line");
   assert.equal(dialogOf(web), null, "Web does not mount the Desktop HTML dialog");
   assert.equal(config.calls.flushNow, 1, "approval preserves Web reset behavior");
   const cancelConfig = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 66 } } });
@@ -258,6 +291,26 @@ test("Web profile keeps native reset confirmation and never mounts the HTML dial
   findButton(canceled.tree(), "personalization.reset").props.onClick();
   assert.equal(canceled.confirms.length, 1);
   assert.equal(cancelConfig.calls.flushNow, 0, "decline remains a no-op");
+});
+
+test("Web native reset confirmation lists all three changed fields on separate lines in zh/en", async () => {
+  const skins = { meirenzhi: {
+    wallpaper: "builtin:meirenzhi:mupeiling",
+    slogan: { zh: "自定义标语", en: "Custom slogan" },
+    panelOpacity: 68,
+  } };
+  for (const [translations, expected] of [
+    [DICTS.zh, "以下设置将恢复为出厂默认：\n\n• 壁纸 Wallpaper\n• 标语 Slogan\n• 通透度 Transparency\n\n此操作立即生效，确认继续吗？"],
+    [DICTS.en, "These settings will be reset to factory defaults:\n\n• Wallpaper\n• Slogan\n• Panel translucency\n\nThis takes effect immediately. Continue?"],
+  ]) {
+    const config = makeConfigClient({ skins });
+    const web = mountPanel({ skinId: "meirenzhi", config, desktop: false, translations, confirmResponse: false });
+    await tick();
+    findButton(web.tree(), translations["personalization.reset"]).props.onClick();
+    assert.deepEqual(web.confirms, [expected]);
+    assert.equal(dialogOf(web), null, "Web still never mounts the Desktop HTML dialog");
+    assert.equal(config.calls.flushNow, 0, "cancel does not reset anything");
+  }
 });
 
 test("offline: every write path is disabled — edits included (ADR-0003)", async () => {
@@ -297,6 +350,8 @@ test("清空图库 confirms with the affected list and stops at the first failur
   await tick();
   const text = textsOf(panel.tree()).find((value) => value.includes("personalization.library.clearConfirm"));
   assert.equal(dialogOf(panel)?.open, true, "one modal confirmation opens");
+  assert.equal(flatten(dialogOf(panel)).filter((node) => node.type === "li").length, 0,
+    "gallery confirmations keep their original plain-text presentation");
   assert.ok(text.includes("count=2"), "count in the confirm text");
   assert.ok(text.includes("meirenzhi · wallpaper"), "affected pair listed");
   assert.ok(text.includes("openbmc · wallpaper"), "affected pair listed");
@@ -681,12 +736,14 @@ test("meirenzhi panel renders one wallpaper thumb per catalog builtinChoices (6)
 });
 
 test("PANEL_CSS owns the panel visual interface", () => {
-  // Ownership partition ratchet (45 shell + 55 panel = 100):
+  // Ownership partition ratchet (45 shell + 59 panel = 104):
   // a rule silently moving back to the shell changes this count even when
   // the final injected CSS stays byte-identical.
-  assert.equal(PANEL_CSS.split("\n").length, 55,
-    "PANEL_CSS freezes at 55 rules — including renderer-owned confirmation styles");
+  assert.equal(PANEL_CSS.split("\n").length, 59,
+    "PANEL_CSS freezes at 59 rules — including confirmation tag styles");
   assert.ok(PANEL_CSS.includes(".dsh-skins-pz-dialog::backdrop"), "modal backdrop belongs to the panel");
+  assert.ok(PANEL_CSS.includes(".dsh-skins-pz-dialog-tags{display:flex;flex-wrap:wrap"), "tags wrap on narrow windows");
+  assert.ok(PANEL_CSS.includes(".dsh-skins-pz-dialog-tag::before"), "a dot distinguishes each item beyond color alone");
   // The wallpaper grid and its full-row helpers (migrated from the switcher
   // test with the style-ownership refactor — the panel's visual interface is
   // this module's interface, so its assertions live here).

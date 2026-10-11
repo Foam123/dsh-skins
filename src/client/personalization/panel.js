@@ -115,6 +115,10 @@ export const PANEL_CSS = [
   '.dsh-skins-pz-dialog{box-sizing:border-box;width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:20px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-elevated,var(--dsw-alias-bg-overlay));color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.25));font:inherit}',
   '.dsh-skins-pz-dialog::backdrop{background:rgba(0,0,0,.45)}',
   '.dsh-skins-pz-dialog-message{margin:0 0 20px;white-space:pre-line;line-height:1.6;font-size:14px}',
+  '.dsh-skins-pz-dialog-intro{margin:0;font-size:14px;line-height:1.6}.dsh-skins-pz-dialog-outro{margin:0 0 20px;font-size:14px;line-height:1.6}',
+  '.dsh-skins-pz-dialog-tags{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 16px;padding:0;list-style:none}',
+  '.dsh-skins-pz-dialog-tag{box-sizing:border-box;display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:6px 10px;border:1px solid var(--dsw-alias-border-l2);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 42%,transparent);border-radius:999px;background:var(--dsw-alias-bg-layer-1);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 10%,var(--dsw-alias-bg-overlay));color:var(--dsw-alias-label-primary);font-size:13px;line-height:18px;font-weight:600;white-space:normal}',
+  '.dsh-skins-pz-dialog-tag::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-brand-primary)}',
   '.dsh-skins-pz-dialog-actions{display:flex;justify-content:flex-end;gap:8px}',
   // Stacked (<904px) resets MUST come after the rules they override — the
   // array order is the cascade order among equal-specificity selectors.
@@ -429,13 +433,13 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
     const dialogRef = useRef(null);
     const confirmationRef = useRef(null);
     const [confirmation, setConfirmation] = useState(null);
-    const requestConfirm = (message, accept) => {
+    const requestConfirm = (message, accept, { detailItems = null } = {}) => {
       if (!desktopProfile) {
         if (window.confirm(message)) void accept();
         return;
       }
       if (confirmationRef.current !== null) return;
-      const next = { message, accept };
+      const next = { message, accept, detailItems };
       confirmationRef.current = next;
       setConfirmation(next);
     };
@@ -562,11 +566,11 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
               .filter((field) => overrides[field.key] !== undefined)
               .map((field) => tr(field.labelKey));
             requestConfirm(tr("personalization.resetConfirm", {
-              fields: affected.length > 0 ? affected.join(tr("personalization.resetJoin")) : "—",
+              fields: affected.length > 0 ? `• ${affected.join(tr("personalization.resetJoin"))}` : "—",
             }), () => {
               for (const field of schema.fields) configClient.previewReset(skinId, field.key);
               void configClient.flushNow();
-            });
+            }, { detailItems: affected });
           },
           children: tr("personalization.reset"),
         }) : null,
@@ -588,7 +592,16 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
         onCancel: (event) => { event.preventDefault(); cancelConfirm(); },
         children: [
           jsx("div", { id: "dsh-skins-confirm-title", className: "dsh-skins-pop-title", children: tr("personalization.confirmTitle") }),
-          jsx("p", { className: "dsh-skins-pz-dialog-message", children: confirmation.message }),
+          confirmation.detailItems === null
+            ? jsx("p", { className: "dsh-skins-pz-dialog-message", children: confirmation.message })
+            : jsx("div", { children: [
+                jsx("p", { className: "dsh-skins-pz-dialog-intro", children: tr("personalization.resetConfirmIntro") }),
+                confirmation.detailItems.length > 0
+                  ? jsx("ul", { className: "dsh-skins-pz-dialog-tags", children: confirmation.detailItems.map((label) =>
+                      jsx("li", { className: "dsh-skins-pz-dialog-tag", children: label }, label)) })
+                  : jsx("p", { className: "dsh-skins-pz-dialog-message", children: "—" }),
+                jsx("p", { className: "dsh-skins-pz-dialog-outro", children: tr("personalization.resetConfirmOutro") }),
+              ] }),
           jsx("div", { className: "dsh-skins-pz-dialog-actions", children: [
             jsx("button", {
               type: "button", className: "dsh-skins-pz-btn", autoFocus: true,
