@@ -160,7 +160,7 @@ function averageCanvas(context, width, height) {
 async function sampleBackdropCached(url, fill, scrim) {
   if (backdropSampleCache.size > 8) backdropSampleCache.clear();
   if (!backdropSampleCache.has(url)) {
-    backdropSampleCache.set(url, (async () => {
+    const promise = (async () => {
       const drawn = await sampleBackdropStrip(url, fill);
       if (drawn === null) return null;
       if (scrim !== null) {
@@ -171,7 +171,13 @@ async function sampleBackdropCached(url, fill, scrim) {
         drawn.context.fillRect(0, 0, CAPTION_SAMPLE_WIDTH, CAPTION_SAMPLE_HEIGHT);
       }
       return averageCanvas(drawn.context, CAPTION_SAMPLE_WIDTH, CAPTION_SAMPLE_HEIGHT);
-    })());
+    })();
+    backdropSampleCache.set(url, promise);
+    // A failed sample must not poison the cache: evict so a later attempt
+    // (probe-mounted-late retries) can try again.
+    void promise.then((value) => {
+      if (value === null) backdropSampleCache.delete(url);
+    }).catch(() => {});
   }
   return backdropSampleCache.get(url);
 }
@@ -185,29 +191,40 @@ function findCaptionProbe() {
 }
 
 async function alignCaptionProbe(effects, tag) {
+  // The probe span, like the titlebar marker, is installed by the preload
+  // around DOMContentLoaded and may appear AFTER the skin mounts — poll for
+  // it briefly instead of a single mount-time check (the alpha.2 field
+  // failure). On ordinary Web the probe never appears and the loop burns
+  // ~4s of an idle async task before leaving the empty no-op tag.
+  const attempts = 6;
   try {
-    const probe = findCaptionProbe();
-    if (probe === null) return; // no win32 preload probe (ordinary Web) — nothing to align
-    const fills = effects.tokenOverrides?.["--dsw-specific-sidebar-fill"] ?? null;
-    if (fills === null) return;
-    const lightFill = parseRgbaChannels(fills.light);
-    const darkFill = parseRgbaChannels(fills.dark);
-    if (lightFill === null || darkFill === null) return;
-    const imageLight = effects.backdrop?.imageLight ?? null;
-    const imageDark = effects.backdrop?.imageDark ?? null;
-    if (imageLight === null || imageDark === null) return;
-    const [lightBackdrop, darkBackdrop] = await Promise.all([
-      sampleBackdropCached(imageLight, lightFill, parseScrimStops(imageLight)),
-      sampleBackdropCached(imageDark, darkFill, parseScrimStops(imageDark)),
-    ]);
-    if (lightBackdrop === null || darkBackdrop === null) return;
-    if (findCaptionProbe() === null) return; // probe vanished meanwhile (skin unmounted)
-    // Commit atomically: both modes resolved, else the empty tag stays a no-op.
-    tag.textContent = buildCaptionCss({
-      light: compositeOverBackdrop(lightFill, lightBackdrop),
-      dark: compositeOverBackdrop(darkFill, darkBackdrop),
-    });
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 750));
+      if (findCaptionProbe() === null) continue;
+      const fills = effects.tokenOverrides?.["--dsw-specific-sidebar-fill"] ?? null;
+      if (fills === null) { tag.dataset.captionState = "no-fill-token"; return; }
+      const lightFill = parseRgbaChannels(fills.light);
+      const darkFill = parseRgbaChannels(fills.dark);
+      if (lightFill === null || darkFill === null) { tag.dataset.captionState = "bad-fill-token"; return; }
+      const imageLight = effects.backdrop?.imageLight ?? null;
+      const imageDark = effects.backdrop?.imageDark ?? null;
+      if (imageLight === null || imageDark === null) { tag.dataset.captionState = "no-backdrop"; return; }
+      const [lightBackdrop, darkBackdrop] = await Promise.all([
+        sampleBackdropCached(imageLight, lightFill, parseScrimStops(imageLight)),
+        sampleBackdropCached(imageDark, darkFill, parseScrimStops(imageDark)),
+      ]);
+      if (lightBackdrop === null || darkBackdrop === null) continue; // transient decode failure — retry
+      // Commit atomically: both modes resolved, else the empty tag stays a no-op.
+      tag.textContent = buildCaptionCss({
+        light: compositeOverBackdrop(lightFill, lightBackdrop),
+        dark: compositeOverBackdrop(darkFill, darkBackdrop),
+      });
+      tag.dataset.captionState = "filled";
+      return;
+    }
+    tag.dataset.captionState = "no-probe";
   } catch {
+    tag.dataset.captionState = "failed";
     // sampling is best-effort; the empty tag is the fail-closed state
   }
 }
