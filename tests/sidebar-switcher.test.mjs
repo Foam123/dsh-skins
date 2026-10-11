@@ -16,10 +16,12 @@ function makeDom(viewportHeight = 900, viewportWidth = 1400) {
   const confirms = [];
   const created = [];
   let confirmResult = true;
+  let modalOpen = false;
   globalThis.document = {
     head: { appendChild: () => {}, removeChild: () => {} },
     body: { appendChild: () => {} },
     getElementById: (id) => (id.endsWith("-gear") ? { focus: () => focused.push(id) } : null),
+    querySelector: (selector) => selector === "dialog.dsh-skins-pz-dialog[open]" && modalOpen ? {} : null,
     createElement: () => { const el = { dataset: {}, appendChild: () => {}, remove() {} }; created.push(el); return el; },
     addEventListener: (kind, fn) => docListeners.set(kind, fn),
     removeEventListener: () => {},
@@ -35,6 +37,7 @@ function makeDom(viewportHeight = 900, viewportWidth = 1400) {
   return {
     docListeners, winListeners, focused, confirms, created,
     setConfirm: (value) => { confirmResult = value; },
+    setModalOpen: (value) => { modalOpen = value; },
     fireOutsidePointer: () => docListeners.get("pointerdown")({ target: { closest: () => null } }),
     fireEscape: () => winListeners.get("keydown")({ key: "Escape" }),
   };
@@ -236,6 +239,21 @@ test("④ Escape closes directly — no confirmation (ADR-0003)", async () => {
   await tick();
   assert.equal(h.shell(), null, "Escape closes");
   assert.equal(h.dom.confirms.length, 0, "no dialog");
+});
+
+test("modal confirmation owns Escape until it closes; the next Escape dismisses the shell", async () => {
+  const h = makeHarness();
+  await h.openShell();
+  h.gearButton("meirenzhi").props.onClick();
+  await tick();
+  h.dom.setModalOpen(true);
+  h.dom.fireEscape();
+  await tick();
+  assert.notEqual(h.shell(), null, "shell stays open while the HTML dialog owns Escape");
+  h.dom.setModalOpen(false);
+  h.dom.fireEscape();
+  await tick();
+  assert.equal(h.shell(), null, "shell closes once the modal has been dismissed");
 });
 
 test("⑤ gear re-click collapses the panel directly (no confirm, ADR-0003)", async () => {

@@ -61,19 +61,26 @@ function makeConfigClient(overrides = {}) {
   };
 }
 
-function installDom() {
+function installDom({ desktop, confirmResponse }) {
   const confirms = [];
   globalThis.document = {
     getElementById: () => null,
     createElement: () => ({}),
   };
-  globalThis.window = { confirm: (text) => { confirms.push(text); return true; } };
+  globalThis.location = desktop
+    ? { protocol: "dsh-app:", hostname: "app" }
+    : { protocol: "http:", hostname: "127.0.0.1" };
+  globalThis.window = { confirm: (text) => {
+    if (desktop) throw new Error("never invoke window.confirm in Desktop");
+    confirms.push(text);
+    return confirmResponse;
+  } };
   return confirms;
 }
 
-function mountPanel({ skinId, status, config, translations } = {}) {
+function mountPanel({ skinId, status, config, translations, desktop = true, confirmResponse = true } = {}) {
   const react = createFakeReact();
-  const confirms = installDom();
+  const confirms = installDom({ desktop, confirmResponse });
   const configClient = config ?? makeConfigClient({ status });
   // Mirrors the real locale runtime: template lookup + {placeholder}
   // substitution. Tests assert on the substituted params, so append them.
@@ -100,6 +107,20 @@ function mountPanel({ skinId, status, config, translations } = {}) {
   });
   return { tree: () => tree, confirms, configClient, tr };
 }
+
+const dialogOf = (panel) => flatten(panel.tree()).find((n) => n.type === "dialog") ?? null;
+const confirmDialog = async (panel) => {
+  const button = findButton(dialogOf(panel), "personalization.confirm");
+  assert.ok(button, "confirmation action exists");
+  button.props.onClick();
+  await tick();
+};
+const cancelDialog = async (panel) => {
+  const button = findButton(dialogOf(panel), "personalization.cancel");
+  assert.ok(button, "cancel action exists");
+  button.props.onClick();
+  await tick();
+};
 
 const textsOf = (tree) => flatten(tree).map((n) => n.props?.children).filter((c) => typeof c === "string");
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -181,28 +202,47 @@ test("恢复默认 confirms with the affected field list; decline is a no-op (us
   const resetInHead = head?.props?.children?.some?.((c) => c?.type === "button" && c?.props?.children === "personalization.reset");
   assert.ok(resetInHead, "reset lives in the header row — its appearance cannot grow the panel (v1.0.0 height ruling)");
 
-  // Agreeing: the dialog lists the non-default field(s), then everything
-  // resets and flushes at once (ADR-0003 — immediate and auto-saved).
-  await reset().props.onClick();
+  // The renderer-owned HTML dialog opens before any destructive write.
+  reset().props.onClick();
   await tick();
-  assert.equal(panel.confirms.length, 1, "destructive reset asks first");
-  assert.ok(panel.confirms[0].includes("personalization.panelTranslucency"), "the affected field is listed");
+  assert.equal(dialogOf(panel)?.open, true, "showModal places the confirmation in the renderer top layer");
+  assert.ok(textsOf(panel.tree()).some((text) => text.includes("personalization.panelTranslucency")), "affected field is listed");
+  assert.equal(panel.configClient.calls.flushNow, 0, "opening a dialog never saves");
+  await confirmDialog(panel);
+  assert.equal(dialogOf(panel), null, "accept removes the dialog");
   assert.equal(panel.configClient.calls.flushNow, 1, "agreeing flushes the factory values at once");
   assert.deepEqual(panel.configClient.calls.previewReset.map((c) => c.key),
     getSkinSchema("meirenzhi").fields.map((f) => f.key), "every field reset to factory");
 
   // Declining: asked again, nothing happens at all. (The agree path above
   // legitimately emptied the override set, so re-establish one first.)
-  const declineConfirms = [];
-  globalThis.window.confirm = (text) => { declineConfirms.push(text); return false; };
   translucency.props.onChange({ target: { value: "70" } });
   await tick();
-  await reset().props.onClick();
+  reset().props.onClick();
   await tick();
-  assert.equal(declineConfirms.length, 1, "asked again");
-  assert.ok(declineConfirms[0].includes("personalization.panelTranslucency"), "affected field listed again");
+  assert.ok(textsOf(panel.tree()).some((text) => text.includes("personalization.panelTranslucency")), "affected field listed again");
+  await cancelDialog(panel);
+  assert.equal(dialogOf(panel), null, "cancel dismisses without a native dialog");
   assert.equal(panel.configClient.calls.flushNow, 1, "decline flushes nothing");
   assert.equal(panel.configClient.calls.previewReset.length, getSkinSchema("meirenzhi").fields.length, "decline resets nothing");
+});
+
+test("Web profile keeps native reset confirmation and never mounts the HTML dialog", async () => {
+  const config = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 66 } } });
+  const web = mountPanel({ skinId: "meirenzhi", config, desktop: false });
+  await tick();
+  findButton(web.tree(), "personalization.reset").props.onClick();
+  await tick();
+  assert.equal(web.confirms.length, 1, "Web still calls window.confirm once");
+  assert.ok(web.confirms[0].includes("personalization.panelTranslucency"));
+  assert.equal(dialogOf(web), null, "Web does not mount the Desktop HTML dialog");
+  assert.equal(config.calls.flushNow, 1, "approval preserves Web reset behavior");
+  const cancelConfig = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 66 } } });
+  const canceled = mountPanel({ skinId: "meirenzhi", config: cancelConfig, desktop: false, confirmResponse: false });
+  await tick();
+  findButton(canceled.tree(), "personalization.reset").props.onClick();
+  assert.equal(canceled.confirms.length, 1);
+  assert.equal(cancelConfig.calls.flushNow, 0, "decline remains a no-op");
 });
 
 test("offline: every write path is disabled — edits included (ADR-0003)", async () => {
@@ -238,13 +278,15 @@ test("清空图库 confirms with the affected list and stops at the first failur
   };
   const panel = mountPanel({ skinId: "meirenzhi", status: "synced", config });
   await tick();
-  await findButton(panel.tree(), "personalization.library.clear").props.onClick();
-
-  assert.equal(panel.confirms.length, 1, "exactly one confirm");
-  const text = panel.confirms[0];
-  assert.ok(text.includes("2"), "count in the confirm text");
+  findButton(panel.tree(), "personalization.library.clear").props.onClick();
+  await tick();
+  const text = textsOf(panel.tree()).find((value) => value.includes("personalization.library.clearConfirm"));
+  assert.equal(dialogOf(panel)?.open, true, "one modal confirmation opens");
+  assert.ok(text.includes("count=2"), "count in the confirm text");
   assert.ok(text.includes("meirenzhi · wallpaper"), "affected pair listed");
   assert.ok(text.includes("openbmc · wallpaper"), "affected pair listed");
+  assert.deepEqual(deleted, [], "no image is deleted before approval");
+  await confirmDialog(panel);
   assert.deepEqual(deleted, [assets[0].id, assets[1].id], "stops at the first failure");
   assert.ok(textsOf(panel.tree()).includes("personalization.library.clearFailed"), "failure surfaced");
 });
@@ -254,15 +296,93 @@ test("declining the clear-library confirm deletes nothing", async () => {
   const config = makeConfigClient({ status: "synced", library: assets });
   config.deleteImage = async () => { throw new Error("must not be called"); };
   const panel = mountPanel({ skinId: "meirenzhi", status: "synced", config });
-  globalThis.window.confirm = () => false;
   await tick();
-  await findButton(panel.tree(), "personalization.library.clear").props.onClick();
-  // Reaching here without throwing means the decline path held.
+  findButton(panel.tree(), "personalization.library.clear").props.onClick();
+  await tick();
+  await cancelDialog(panel);
+  assert.equal(dialogOf(panel), null, "cancel removes the HTML dialog");
+  // The throwing deleteImage stub proves cancellation did not delete anything.
+});
+
+test("Web profile retains native gallery confirmations for clear and referenced deletion", async () => {
+  const asset = { id: "u_0123456789abcdef0123456789abcdef", displayName: "used.png" };
+  const options = {
+    library: [asset], references: { [asset.id]: [{ skinId: "meirenzhi", key: "wallpaper" }] },
+  };
+  const clearConfig = makeConfigClient(options);
+  const cleared = [];
+  clearConfig.deleteImage = async (id) => { cleared.push(id); return { deleted: id }; };
+  const clearPanel = mountPanel({ skinId: "meirenzhi", config: clearConfig, desktop: false });
+  await tick();
+  findButton(clearPanel.tree(), "personalization.library.clear").props.onClick();
+  await tick();
+  assert.equal(clearPanel.confirms.length, 1);
+  assert.ok(clearPanel.confirms[0].includes("meirenzhi · wallpaper"));
+  assert.deepEqual(cleared, [asset.id]);
+  assert.equal(dialogOf(clearPanel), null);
+
+  const deleteConfig = makeConfigClient(options);
+  const deleted = [];
+  deleteConfig.deleteImage = async (id) => { deleted.push(id); return { deleted: id }; };
+  const deletePanel = mountPanel({ skinId: "meirenzhi", config: deleteConfig, desktop: false, confirmResponse: false });
+  await tick();
+  const deleteButton = flatten(deletePanel.tree()).find((node) =>
+    node.type === "button" && String(node.props["aria-label"] ?? "").includes("used.png"));
+  deleteButton.props.onClick();
+  await tick();
+  assert.equal(deletePanel.confirms.length, 1);
+  assert.ok(deletePanel.confirms[0].includes("meirenzhi · wallpaper"));
+  assert.deepEqual(deleted, [], "declining the native confirmation still preserves the image");
+  assert.equal(dialogOf(deletePanel), null);
 });
 
 const delButtonsOf = (panel) => flatten(panel.tree()).filter(
   (n) => n.type === "button" && typeof n.props["aria-label"] === "string" && n.props["aria-label"].startsWith("personalization.library.delete:"),
 );
+
+test("referenced image deletion requires renderer confirmation; Escape cancels and double accept is idempotent", async () => {
+  const asset = { id: "u_0123456789abcdef0123456789abcdef", displayName: "used.png" };
+  const config = makeConfigClient({
+    library: [asset], references: { [asset.id]: [{ skinId: "meirenzhi", key: "wallpaper" }] },
+  });
+  const deleted = [];
+  config.deleteImage = async (id) => { deleted.push(id); return { deleted: id }; };
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  delButtonsOf(panel)[0].props.onClick();
+  await tick();
+  assert.equal(dialogOf(panel)?.open, true, "referenced image asks first");
+  assert.ok(textsOf(panel.tree()).some((text) => text.includes("meirenzhi · wallpaper")));
+  let prevented = false;
+  dialogOf(panel).props.onCancel({ preventDefault: () => { prevented = true; } });
+  await tick();
+  assert.equal(prevented, true, "native HTML dialog Escape is consumed");
+  assert.equal(dialogOf(panel), null);
+  assert.deepEqual(deleted, [], "Escape never deletes the referenced image");
+  delButtonsOf(panel)[0].props.onClick();
+  await tick();
+  const accept = findButton(dialogOf(panel), "personalization.confirm").props.onClick;
+  accept();
+  accept();
+  await tick();
+  assert.deepEqual(deleted, [asset.id], "double click cannot duplicate destructive requests");
+});
+
+test("confirmation remains fail-closed when synchronization is lost while open", async () => {
+  const config = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 66 } } });
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  findButton(panel.tree(), "personalization.reset").props.onClick();
+  await tick();
+  config.setState({ status: "offline-failed" });
+  await tick();
+  assert.equal(findButton(dialogOf(panel), "personalization.confirm").props.disabled, true);
+  // A stale captured handler must still refuse the write even if called directly.
+  findButton(dialogOf(panel), "personalization.confirm").props.onClick();
+  await tick();
+  assert.equal(config.calls.flushNow, 0);
+  assert.deepEqual(config.calls.previewReset, []);
+});
 
 test("single delete: busy in flight, outcome always surfaced, retry after failure", async () => {
   const assets = [
@@ -546,11 +666,12 @@ test("meirenzhi panel renders one wallpaper thumb per catalog builtinChoices (6)
 });
 
 test("PANEL_CSS owns the panel visual interface", () => {
-  // Ownership partition ratchet (45 shell + 51 panel + 11 update = 107):
+  // Ownership partition ratchet (45 shell + 55 panel = 100):
   // a rule silently moving back to the shell changes this count even when
   // the final injected CSS stays byte-identical.
-  assert.equal(PANEL_CSS.split("\n").length, 51,
-    "PANEL_CSS freezes at 51 rules — moving one out (or in) must be deliberate");
+  assert.equal(PANEL_CSS.split("\n").length, 55,
+    "PANEL_CSS freezes at 55 rules — including renderer-owned confirmation styles");
+  assert.ok(PANEL_CSS.includes(".dsh-skins-pz-dialog::backdrop"), "modal backdrop belongs to the panel");
   // The wallpaper grid and its full-row helpers (migrated from the switcher
   // test with the style-ownership refactor — the panel's visual interface is
   // this module's interface, so its assertions live here).

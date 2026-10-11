@@ -109,6 +109,13 @@ export const PANEL_CSS = [
   '.dsh-skins-pz-danger{color:var(--dsw-alias-error-text,var(--dsw-static-red-500,#d33));border-color:var(--dsw-alias-error-text,var(--dsw-static-red-500,#d33))}',
   '.dsh-skins-pz-fields-locale{flex-direction:row;gap:6px}',
   '.dsh-skins-pz-fields-locale .dsh-skins-pz-input{flex:1;min-width:0}',
+  // HTML <dialog>.showModal() stays inside the renderer's top layer: unlike
+  // window.confirm(), it never opens the Windows/Electron JavaScript dialog
+  // that can leave the Desktop window unfocused after dismissal.
+  '.dsh-skins-pz-dialog{box-sizing:border-box;width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:20px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-elevated,var(--dsw-alias-bg-overlay));color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.25));font:inherit}',
+  '.dsh-skins-pz-dialog::backdrop{background:rgba(0,0,0,.45)}',
+  '.dsh-skins-pz-dialog-message{margin:0 0 20px;white-space:pre-line;line-height:1.6;font-size:14px}',
+  '.dsh-skins-pz-dialog-actions{display:flex;justify-content:flex-end;gap:8px}',
   // Stacked (<904px) resets MUST come after the rules they override — the
   // array order is the cascade order among equal-specificity selectors.
   '@media (max-width:904px){.dsh-skins-pz-thumbs{grid-template-columns:repeat(4,1fr)}}',
@@ -188,10 +195,11 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
 
   // ---- wallpaper: built-in choices + user library in ONE section -----------
 
-  function WallpaperSection({ skinId, field, value, onValue, state, disabled }) {
+  function WallpaperSection({ skinId, field, value, onValue, state, disabled, requestConfirm }) {
     const uploadRef = useRef(null);
     const [message, setMessage] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
+    const [clearing, setClearing] = useState(false);
     const [visible, setVisible] = useState(PAGE_SIZE);
     const schema = getSkinSchema(skinId);
     const builtins = schema?.builtinAssets ?? {};
@@ -199,26 +207,34 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
     const choices = field.builtinChoices ?? [];
     const library = state.library;
 
-    const removeAsset = async (asset) => {
-      if (deletingId !== null) return; // one delete in flight — no double DELETEs
-      const references = state.references[asset.id] ?? [];
-      const names = references.map((entry) => `${labelFor(entry.skinId)} · ${entry.key}`).join("\n");
-      const confirmed = references.length === 0
-        || window.confirm(`${tr("personalization.library.deleteConfirm")}\n${names}`);
-      if (!confirmed) return;
+    const deleteAsset = async (asset) => {
       setMessage(null); // a stale note must not outlive its action
       setDeletingId(asset.id);
-      const result = await configClient.deleteImage(asset.id);
-      setDeletingId(null);
-      // Success is announced too: the refetch inside deleteImage removes the
-      // cell, but the outcome must never read as "did it actually delete?"
-      // (field report — silent success left the user unsure).
-      setMessage(result.error
-        ? tr("personalization.library.deleteFailed")
-        : tr("personalization.library.deleted", { name: asset.displayName }));
+      try {
+        const result = await configClient.deleteImage(asset.id);
+        // Success is announced too: the refetch inside deleteImage removes the
+        // cell, but the outcome must never read as "did it actually delete?"
+        setMessage(result.error
+          ? tr("personalization.library.deleteFailed")
+          : tr("personalization.library.deleted", { name: asset.displayName }));
+      } catch {
+        setMessage(tr("personalization.library.deleteFailed"));
+      } finally {
+        setDeletingId(null);
+      }
     };
 
-    const clearLibrary = async () => {
+    const removeAsset = (asset) => {
+      if (deletingId !== null || clearing) return;
+      const references = state.references[asset.id] ?? [];
+      if (references.length === 0) return deleteAsset(asset);
+      const names = references.map((entry) => `${labelFor(entry.skinId)} · ${entry.key}`).join("\n");
+      requestConfirm(`${tr("personalization.library.deleteConfirm")}\n${names}`,
+        () => deleteAsset(asset));
+    };
+
+    const clearLibrary = () => {
+      if (clearing || deletingId !== null || library.length === 0) return;
       const pairs = new Map();
       for (const asset of library) {
         for (const entry of state.references[asset.id] ?? []) {
@@ -226,20 +242,28 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
         }
       }
       const names = [...pairs.keys()].join("、");
-      const confirmed = window.confirm(tr("personalization.library.clearConfirm", {
+      requestConfirm(tr("personalization.library.clearConfirm", {
         count: library.length,
         names: names === "" ? "—" : names,
-      }));
-      if (!confirmed) return;
-      for (const asset of [...library]) {
-        const result = await configClient.deleteImage(asset.id);
-        if (result.error) {
-          // Stop at the first failure and surface what is left (L8).
+      }), async () => {
+        setClearing(true);
+        try {
+          for (const asset of [...library]) {
+            const result = await configClient.deleteImage(asset.id);
+            if (result.error) {
+              // Stop at the first failure and surface what is left (L8).
+              setMessage(tr("personalization.library.clearFailed"));
+              void configClient.refetch();
+              return;
+            }
+          }
+        } catch {
           setMessage(tr("personalization.library.clearFailed"));
-          configClient.refetch();
-          return;
+          void configClient.refetch();
+        } finally {
+          setClearing(false);
         }
-      }
+      });
     };
 
     return jsx("div", { className: "dsh-skins-pz-row", children: [
@@ -275,7 +299,7 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
                 jsx("button", {
                   type: "button",
                   className: `dsh-skins-pz-del${deletingId === asset.id ? " dsh-skins-pz-del-busy" : ""}`,
-                  disabled: disabled || deletingId !== null,
+                  disabled: disabled || deletingId !== null || clearing,
                   "aria-label": `${tr("personalization.library.delete")}: ${asset.displayName}`,
                   onClick: () => removeAsset(asset),
                   children: deletingId === asset.id
@@ -297,13 +321,13 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
           jsx("div", { className: "dsh-skins-pz-rowbtns", children: [
             jsx("button", {
               type: "button", className: "dsh-skins-pz-btn",
-              disabled: disabled || deletingId !== null,
+              disabled: disabled || deletingId !== null || clearing,
               onClick: () => uploadRef.current?.click(),
               children: tr("personalization.library.upload"),
             }),
             library.length > 0 ? jsx("button", {
               type: "button", className: "dsh-skins-pz-btn dsh-skins-pz-danger",
-              disabled: disabled || deletingId !== null,
+              disabled: disabled || deletingId !== null || clearing,
               onClick: clearLibrary,
               children: tr("personalization.library.clear"),
             }) : null,
@@ -396,7 +420,40 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
   return function PersonalizationPanel({ skinId, onCollapse }) {
     const state = useConfigState();
     const schema = getSkinSchema(skinId);
+    // The Desktop product renderer is served at this privileged origin on
+    // Windows and macOS. Browser Web profiles keep their original JS confirm.
+    const desktopProfile = typeof location !== "undefined"
+      && location.protocol === "dsh-app:" && location.hostname === "app";
     const headerRef = useRef(null);
+    const dialogRef = useRef(null);
+    const confirmationRef = useRef(null);
+    const [confirmation, setConfirmation] = useState(null);
+    const requestConfirm = (message, accept) => {
+      if (!desktopProfile) {
+        if (window.confirm(message)) void accept();
+        return;
+      }
+      if (confirmationRef.current !== null) return;
+      const next = { message, accept };
+      confirmationRef.current = next;
+      setConfirmation(next);
+    };
+    const cancelConfirm = () => {
+      confirmationRef.current = null;
+      setConfirmation(null);
+    };
+    const acceptConfirm = () => {
+      if (confirmationRef.current !== confirmation) return;
+      confirmationRef.current = null; // guard against two clicks in one tick
+      setConfirmation(null);
+      const current = configClient.getState();
+      if (current.status === "synced" && current.mode !== "recovery") {
+        void confirmation.accept();
+      }
+    };
+    useEffect(() => {
+      if (confirmation !== null) dialogRef.current?.showModal?.();
+    }, [confirmation]);
     // In wide mode the panel mounts to the shell's right while the shell is
     // still narrow. Focus the heading without asking the shell to
     // horizontally scroll it into view; that transient scrollLeft used to
@@ -423,7 +480,7 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
         case "range": return jsx(RangeField, { ...common, key: field.key });
         case "select": return jsx(SelectField, { ...common, key: field.key });
         case "image": return jsx(WallpaperSection, {
-          ...common, key: field.key, skinId, state,
+          ...common, key: field.key, skinId, state, requestConfirm,
         });
         default: return null;
       }
@@ -503,12 +560,12 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
             const affected = schema.fields
               .filter((field) => overrides[field.key] !== undefined)
               .map((field) => tr(field.labelKey));
-            const confirmed = window.confirm(tr("personalization.resetConfirm", {
+            requestConfirm(tr("personalization.resetConfirm", {
               fields: affected.length > 0 ? affected.join(tr("personalization.resetJoin")) : "—",
-            }));
-            if (!confirmed) return;
-            for (const field of schema.fields) configClient.previewReset(skinId, field.key);
-            void configClient.flushNow();
+            }), () => {
+              for (const field of schema.fields) configClient.previewReset(skinId, field.key);
+              void configClient.flushNow();
+            });
           },
           children: tr("personalization.reset"),
         }) : null,
@@ -525,6 +582,25 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
       statusCluster.length > 0 ? jsx("div", { className: "dsh-skins-pz-actions", children:
         jsx("div", { className: "dsh-skins-pz-cluster dsh-skins-pz-cluster-status", children: statusCluster }),
       }) : null,
+      confirmation === null ? null : jsx("dialog", {
+        ref: dialogRef, className: "dsh-skins-pz-dialog", "aria-labelledby": "dsh-skins-confirm-title",
+        onCancel: (event) => { event.preventDefault(); cancelConfirm(); },
+        children: [
+          jsx("div", { id: "dsh-skins-confirm-title", className: "dsh-skins-pop-title", children: tr("personalization.confirmTitle") }),
+          jsx("p", { className: "dsh-skins-pz-dialog-message", children: confirmation.message }),
+          jsx("div", { className: "dsh-skins-pz-dialog-actions", children: [
+            jsx("button", {
+              type: "button", className: "dsh-skins-pz-btn", autoFocus: true,
+              onClick: cancelConfirm, children: tr("personalization.cancel"),
+            }),
+            jsx("button", {
+              type: "button", className: "dsh-skins-pz-btn dsh-skins-pz-danger",
+              disabled: writesBlocked, onClick: acceptConfirm,
+              children: tr("personalization.confirm"),
+            }),
+          ] }),
+        ],
+      }),
     ] });
   };
 }

@@ -108,6 +108,13 @@ export function createFakeReact() {
         children: children === undefined ? undefined : instantiate(children, `${path}/${String(element.type)}`),
       },
     };
+    // A modal HTML dialog belongs to the renderer top layer, not window.confirm.
+    // Expose its open/close lifecycle to component-level tests without a browser.
+    if (node.type === "dialog") {
+      node.open = false;
+      node.showModal = () => { node.open = true; };
+      node.close = () => { node.open = false; };
+    }
     // Wire object refs so focus management is observable in tests.
     if (node.props.ref && typeof node.props.ref === "object") node.props.ref.current = node;
     return node;

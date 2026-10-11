@@ -375,7 +375,11 @@ export function installSidebarSwitcher(ctx, { runtime, jsx, react, reactDom, con
         if (node.closest(".dsh-skins-pop, .dsh-skins-switcher-wrap")) return;
         closeShell();
       };
-      const onKey = (event) => { if (event.key === "Escape") closeShell(); };
+      const onKey = (event) => {
+        // A modal <dialog> owns Escape while confirmation is pending. Closing
+        // the whole shell here would bypass its cancel event/focus restore.
+        if (event.key === "Escape" && !document.querySelector?.("dialog.dsh-skins-pz-dialog[open]")) closeShell();
+      };
       document.addEventListener("pointerdown", onPointer, true);
       window.addEventListener("keydown", onKey);
       return () => {
