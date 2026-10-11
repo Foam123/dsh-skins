@@ -375,6 +375,22 @@ test("Desktop blur candidates follow P without changing the Web backdrop blur", 
   expectBlur(meirenzhi, { panelOpacity: 100 }, 12, { light: 12 + 100 / 55, dark: 12 + 100 / 55 }, "MeirenZhi P100");
 });
 
+test("meirenzhi Desktop projects factory P55 while Web factory remains P35", async () => {
+  const { createMeirenzhiSkin } = await import("../src/client/skins/meirenzhi/index.js");
+  const skin = createMeirenzhiSkin({ jsx: () => null });
+  const assetResolver = (ref) => ({ url: `builtin://${ref.skinId}/${ref.assetKey}`, mime: "image/webp" });
+  const desktop = projectSkin(skin, {}, { profile: "desktop", assetResolver });
+  const web = projectSkin(skin, {}, { profile: "web", assetResolver });
+  assert.equal(desktop.degraded, "none");
+  assert.equal(web.degraded, "none");
+  assert.deepEqual(desktop.effects.tokenOverrides["--dsw-alias-bg-base"],
+    { light: "rgba(250, 249, 246, 0.55)", dark: "rgba(18, 18, 26, 0.55)" });
+  assert.deepEqual(web.effects.tokenOverrides["--dsw-alias-bg-base"],
+    { light: "rgba(250, 249, 246, 0.35)", dark: "rgba(18, 18, 26, 0.35)" });
+  assert.equal(desktop.effects.backdrop.blur, 4);
+  assert.equal(web.effects.backdrop.blur, 1);
+});
+
 test("the REAL meirenzhi factory projects single scrim, static palette and static favicon", async () => {
   const { createMeirenzhiSkin } = await import("../src/client/skins/meirenzhi/index.js");
   // No-arg calls throw at the jsxRuntime destructure; stub it (review ③-4②).

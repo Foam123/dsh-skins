@@ -17,7 +17,11 @@ window.__ModuleLoader__.load({
     const react = require("react");
     const reactDom = require("react-dom");
 
-    const runtime = createSkinRuntime();
+    // Desktop's privileged product renderer is dsh-app://app/ on both Windows
+    // and macOS; a browser Web profile retains the original P=35 default.
+    const profile = window.location?.protocol === "dsh-app:" && window.location?.hostname === "app"
+      ? "desktop" : "web";
+    const runtime = createSkinRuntime({ profile });
     const skinById = new Map();
     // Registration order IS the factory-default order: the first skin wins for
     // users with no stored choice (v1.0.6 起 openbmc 领头；v1.4.0 起
@@ -39,7 +43,7 @@ window.__ModuleLoader__.load({
     // Personalization plumbing (design §7.1): mount immediately on defaults,
     // then hot-update when the config syncs — never block first paint.
     const configClient = typeof fetch === "function"
-      ? createConfigClient({ contextActive: () => runtime.active() })
+      ? createConfigClient({ profile, contextActive: () => runtime.active() })
       : null;
     if (configClient !== null) {
       const assetResolver = (ref) => {

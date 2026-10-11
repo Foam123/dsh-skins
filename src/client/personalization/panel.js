@@ -419,11 +419,12 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
 
   return function PersonalizationPanel({ skinId, onCollapse }) {
     const state = useConfigState();
-    const schema = getSkinSchema(skinId);
     // The Desktop product renderer is served at this privileged origin on
     // Windows and macOS. Browser Web profiles keep their original JS confirm.
     const desktopProfile = typeof location !== "undefined"
       && location.protocol === "dsh-app:" && location.hostname === "app";
+    const profile = desktopProfile ? "desktop" : "web";
+    const schema = getSkinSchema(skinId, profile);
     const headerRef = useRef(null);
     const dialogRef = useRef(null);
     const confirmationRef = useRef(null);
@@ -468,7 +469,7 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
     if (schema === null) return null;
     const writesBlocked = state.status !== "synced" || state.mode === "recovery";
     const overrides = configClient.effectiveOverrides(skinId);
-    const { values } = mergeValues(skinId, overrides);
+    const { values } = mergeValues(skinId, overrides, undefined, profile);
     const hasAnyOverride = Object.keys(overrides).length > 0;
 
     const fieldRows = schema.fields.map((field) => {

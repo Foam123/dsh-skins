@@ -132,6 +132,21 @@ test("clicking the factory-default value on a pristine skin is a no-op (v1.0.0 r
   client.dispose();
 });
 
+test("Desktop P=55 is a no-op default, P=35 is a real override; Web retains the inverse", async () => {
+  for (const [profile, factory, custom] of [["desktop", 55, 35], ["web", 35, 55]]) {
+    const fetchImpl = makeFetch(() => snapshotBody());
+    const client = createConfigClient({ fetchImpl, profile, timeoutMs: 50 });
+    await client.boot();
+    client.preview("meirenzhi", "panelOpacity", factory);
+    assert.deepEqual(client.effectiveOverrides("meirenzhi"), {}, `${profile}: factory click is a no-op`);
+    client.preview("meirenzhi", "panelOpacity", custom);
+    assert.deepEqual(client.effectiveOverrides("meirenzhi"), { panelOpacity: custom });
+    client.preview("meirenzhi", "panelOpacity", factory);
+    assert.deepEqual(client.effectiveOverrides("meirenzhi"), {}, `${profile}: return to factory arms delete`);
+    client.dispose();
+  }
+});
+
 test("on a modified field, clicking the default value arms a delete op (v1.0.0 ruling)", async () => {
   const patches = [];
   const fetchImpl = makeFetch((index, url, init) => {

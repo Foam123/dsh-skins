@@ -44,6 +44,20 @@ test("meirenzhi ships 6 builtin wallpapers with yuntai as the factory default", 
   assert.equal(field("panelOpacity").default, 35);
 });
 
+test("meirenzhi Desktop defaults to 55 while Web stays 35 without mutating the shared catalog", () => {
+  const desktop = getSkinSchema("meirenzhi", "desktop");
+  assert.equal(desktop.fields.find((field) => field.key === "panelOpacity").default, 55);
+  assert.equal(defaultsFor("meirenzhi", "desktop").panelOpacity, 55);
+  assert.equal(mergeValues("meirenzhi", {}, undefined, "desktop").values.panelOpacity, 55);
+  assert.equal(mergeValues("meirenzhi", { panelOpacity: 35 }, undefined, "desktop").values.panelOpacity, 35);
+  assert.equal(defaultsFor("meirenzhi", "web").panelOpacity, 35);
+  assert.equal(getField("meirenzhi", "panelOpacity").default, 35, "base schema remains Web-compatible");
+  for (const id of ["openbmc", "uefi-harness"]) {
+    assert.equal(defaultsFor(id, "desktop").panelOpacity, 55);
+    assert.equal(defaultsFor(id, "web").panelOpacity, 55);
+  }
+});
+
 test("meirenzhi catalog builtinAssets keys equal the wallpaper choices (cross-layer lock)", () => {
   const schema = getSkinSchema("meirenzhi");
   const choices = schema.fields.find((f) => f.key === "wallpaper").builtinChoices;

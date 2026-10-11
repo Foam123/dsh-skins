@@ -25,9 +25,10 @@ function tempDir() {
   return mkdtempSync(join(tmpdir(), "dsh-skins-store-"));
 }
 
-function makeStore(dir, fsOverrides = {}) {
+function makeStore(dir, fsOverrides = {}, profile = "web") {
   return createPersonalizationStore({
     dataDir: dir,
+    profile,
     now: () => NOW,
     fs: { ...REAL_FS, ...fsOverrides },
   });
@@ -93,6 +94,24 @@ test("load-time normalization drops overrides equal to the factory default (v1.0
     "factory-equal locale override dropped (structural comparison)");
   assert.equal(state.revision, 42, "the removal bumps the revision once");
   assert.equal(store.snapshot().mode, "normal", "normal path, not recovery");
+});
+
+test("Desktop load normalization removes factory 55 but retains explicitly chosen 35; Web does the reverse", () => {
+  for (const [profile, factory, custom] of [["desktop", 55, 35], ["web", 35, 55]]) {
+    const dir = tempDir();
+    writeFileSync(join(dir, "state.json"), JSON.stringify({
+      configVersion: 1, revision: 4,
+      skins: { meirenzhi: { panelOpacity: factory } }, library: {},
+    }));
+    assert.deepEqual(makeStore(dir, {}, profile).snapshot().skins, {}, `${profile}: default-equal override is removed`);
+    writeFileSync(join(dir, "state.json"), JSON.stringify({
+      configVersion: 1, revision: 4,
+      skins: { meirenzhi: { panelOpacity: custom } }, library: {},
+    }));
+    const persisted = makeStore(dir, {}, profile).snapshot();
+    assert.deepEqual(persisted.skins.meirenzhi, { panelOpacity: custom }, `${profile}: custom choice survives boot`);
+    assert.equal(persisted.revision, 4, `${profile}: no needless rewrite`);
+  }
 });
 
 test("first install on an empty directory creates initial state", async () => {

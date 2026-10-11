@@ -172,10 +172,15 @@ export const SKINS = {
 // Accessors
 // ---------------------------------------------------------------------------
 
-export function getSkinSchema(skinId) {
+export function getSkinSchema(skinId, profile = "web") {
   const entry = SKINS[skinId];
   if (entry === undefined) return null;
-  return { skinId, fields: entry.fields, builtinAssets: entry.builtinAssets };
+  // Profile-specific factory point: Web keeps the original P=35 while the
+  // Desktop app starts (and resets) 美人志 at P=55. No default is persisted.
+  const fields = profile === "desktop" && skinId === "meirenzhi"
+    ? entry.fields.map((field) => field.key === "panelOpacity" ? { ...field, default: 55 } : field)
+    : entry.fields;
+  return { skinId, fields, builtinAssets: entry.builtinAssets };
 }
 
 export function getField(skinId, key) {
@@ -186,9 +191,9 @@ export function listAssetFields(skinId) {
   return SKINS[skinId]?.fields.filter((field) => field.type === "image") ?? [];
 }
 
-export function defaultsFor(skinId) {
+export function defaultsFor(skinId, profile = "web") {
   const values = {};
-  for (const field of SKINS[skinId]?.fields ?? []) values[field.key] = field.default;
+  for (const field of getSkinSchema(skinId, profile)?.fields ?? []) values[field.key] = field.default;
   return values;
 }
 
@@ -359,8 +364,8 @@ export function validateOverride(skinId, key, value, metaProvider) {
  * `metaProvider(refId) → AssetMeta | null` lets image fields validate
  * against trusted library metadata without importing storage.
  */
-export function mergeValues(skinId, overrides, metaProvider) {
-  const schema = getSkinSchema(skinId);
+export function mergeValues(skinId, overrides, metaProvider, profile = "web") {
+  const schema = getSkinSchema(skinId, profile);
   if (schema === null) return { values: {}, issues: [] };
   const provider = typeof metaProvider === "function" ? metaProvider : undefined;
   const values = {};

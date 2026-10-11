@@ -98,7 +98,7 @@ function buildShellAlignmentCss(bodyAttribute, opaqueFills, backdrop) {
 
 export const shellAlignment = { parseRgbaChannels, buildShellAlignmentCss };
 
-export function createSkinRuntime() {
+export function createSkinRuntime({ profile = "web" } = {}) {
   const skins = new Map();
   const order = [];
   let ctx = null;
@@ -188,6 +188,7 @@ export function createSkinRuntime() {
 
   function projectionContext() {
     return {
+      profile,
       assetResolver: personalization?.assetResolver,
       metaProvider: personalization?.metaProvider,
     };

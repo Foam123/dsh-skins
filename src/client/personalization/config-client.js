@@ -48,6 +48,7 @@ function cloneSkins(skins) {
 export function createConfigClient(options = {}) {
   const fetchImpl = options.fetchImpl ?? (typeof fetch === "function" ? fetch : null);
   const baseUrl = options.baseUrl ?? "/dsh-skins";
+  const profile = options.profile === "desktop" ? "desktop" : "web";
   const timeoutMs = options.timeoutMs ?? FETCH_TIMEOUT_MS;
   const uploadTimeoutMs = options.uploadTimeoutMs ?? UPLOAD_TIMEOUT_MS;
 
@@ -337,7 +338,7 @@ export function createConfigClient(options = {}) {
     // Structural comparison for the same reason as the store's load-time
     // normalization: locale/colorScheme defaults are fresh objects per
     // defaultsFor() call, so `===` never fires for them.
-    if (isSameOverrideValue(value, defaultsFor(skinId)[key])) {
+    if (isSameOverrideValue(value, defaultsFor(skinId, profile)[key])) {
       if (storedOverride === undefined && previewed === undefined) return;
       if (previewed === null) return; // delete op already armed
       return previewReset(skinId, key);

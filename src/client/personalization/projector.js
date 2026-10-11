@@ -143,7 +143,7 @@ export function normalizeEffects(draft) {
  *   metaProvider(id)   → AssetMeta | null       (trusted library metadata)
  */
 export function projectSkin(skin, rawOverrides, context = {}) {
-  const schema = getSkinSchema(skin.id);
+  const schema = getSkinSchema(skin.id, context.profile);
   if (schema === null) {
     // Skin outside the catalog: no personalization contract at all.
     return { effects: null, issues: [], degraded: "failed" };
@@ -151,7 +151,7 @@ export function projectSkin(skin, rawOverrides, context = {}) {
   const project = skin.project;
 
   const attempt = (overrides) => {
-    const { values, issues } = mergeValues(skin.id, overrides, context.metaProvider);
+    const { values, issues } = mergeValues(skin.id, overrides, context.metaProvider, context.profile);
     const resolvedAssets = {};
     for (const field of schema.fields) {
       if (field.type !== "image") continue;
@@ -180,7 +180,7 @@ export function projectSkin(skin, rawOverrides, context = {}) {
   if (first.normalized !== null) return { effects: first.normalized, issues: first.issues, degraded: "none" };
 
   // Layer 2: whole-pipeline retry on catalog defaults.
-  const second = safeAttempt(defaultsFor(skin.id));
+  const second = safeAttempt(defaultsFor(skin.id, context.profile));
   if (second.normalized !== null) return { effects: second.normalized, issues: first.issues, degraded: "defaults" };
 
   // Layer 3: fail closed — the runtime restores the previous valid effects

@@ -159,6 +159,7 @@ export function createPersonalizationStore(options = {}) {
   }
   const fs = options.fs ?? defaultFs();
   const now = options.now ?? Date.now;
+  const profile = options.profile === "desktop" ? "desktop" : "web";
 
   const stateFile = join(dataDir, STATE_FILE);
   const assetsDir = join(dataDir, ASSETS_DIR);
@@ -336,7 +337,7 @@ export function createPersonalizationStore(options = {}) {
         continue;
       }
       const section = state.skins[skinId];
-      const defaults = defaultsFor(skinId);
+      const defaults = defaultsFor(skinId, profile);
       for (const key of Object.keys(section)) {
         if (!validateOverride(skinId, key, section[key], provider).ok) {
           delete section[key];

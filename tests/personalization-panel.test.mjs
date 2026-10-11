@@ -158,6 +158,21 @@ for (const skinId of SKINS) {
   }
 }
 
+test("meirenzhi slider renders Desktop factory 55 and Web factory 35, including after reset", async () => {
+  for (const [desktop, expected] of [[true, "55%"], [false, "35%"]]) {
+    const config = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 70 } } });
+    const panel = mountPanel({ skinId: "meirenzhi", config, desktop });
+    await tick();
+    findButton(panel.tree(), "personalization.reset").props.onClick();
+    if (desktop) { await tick(); await confirmDialog(panel); }
+    await tick();
+    const output = flatten(panel.tree()).find((node) => node.type === "output");
+    assert.equal(output.props.children, expected);
+    assert.deepEqual(config.calls.previewReset.map((call) => call.key),
+      getSkinSchema("meirenzhi").fields.map((field) => field.key));
+  }
+});
+
 test("field edits preview locally and arm the auto-save; no save button exists", async () => {
   const panel = mountPanel({ skinId: "meirenzhi", status: "synced" });
   await tick();

@@ -107,7 +107,7 @@ Every skin's key visuals are open to adjustment. Click the gear button on a skin
 |---|---|---|
 | **Wallpaper** | Pick from the skin's built-in artwork, or upload your own images into a personal library | Each skin's default artwork |
 | **Slogan** | The new-session guidance line, one Chinese and one English copy | The skin's factory slogan |
-| **Translucency** | 0–100%, one value driving three visual layers: panel tint, wallpaper scrim and blur. 0% is pure, fully visible wallpaper; 100% hides it completely | meirenzhi 35, openbmc / uefi-harness 55 |
+| **Translucency** | 0–100%, one value driving three visual layers: panel tint, wallpaper scrim and blur. 0% is pure, fully visible wallpaper; 100% hides it completely | meirenzhi: Web 35%, Desktop 55%; openbmc / uefi-harness: 55% in both |
 
 > **Desktop profile**: the shell is the solid skin base color and the wallpaper shows only inside the conversation area — see "The Desktop profile" below.
 
@@ -124,12 +124,12 @@ Every skin's key visuals are open to adjustment. Click the gear button on a skin
 
 - Any change in the panel applies immediately and is written automatically after a brief (~0.5s) debounce.
 - Two tabs sync within about a second; while offline, write controls disable themselves so edits are never lost silently.
-- Reset-to-default is the one guarded action: it lists the settings it will reset, and after you confirm it returns to factory values and persists automatically.
+- Reset-to-default lists the settings it will reset; after confirmation it returns to factory values and persists automatically. On Desktop, destructive actions use an in-page confirmation to avoid the Electron input-focus issue after native JavaScript dialogs; Web keeps the browser's native confirm.
 - While the panel is open, clicking another skin's card moves the panel straight to that skin's settings.
 
 ### Where settings live, and whether they survive
 
-- Configuration and the library live under `$DSH_HOME/dsh-skins/`, physically isolated from the plugin install directory: plugin upgrades (via the dsh-m marketplace or `dsh plugin`) only replace the plugin install directory and cannot touch it.
+- Web stores configuration and the library under `$DSH_HOME/dsh-skins/`; since v1.5.4 Desktop stores them under `$DSH_HOME/dsh-skins-desktop/`. On first launch Desktop copies existing settings and images from the legacy directory once, **without removing or rewriting the old directory**; the two stores then evolve independently. Both are separate from the plugin installation directory, which upgrades replace.
 - Only overrides are stored: untouched fields automatically follow the new version's defaults, and leftovers of retired skins or fields are cleaned up at load (the v1.4.0 tgcf removal rides this path).
 - A damaged state file triggers recovery mode: indexes are rebuilt and bad files quarantined — your images are never wiped.
 - Uploads pass magic-number validation and size caps; concurrent writes merge per field and never clobber each other.
