@@ -198,7 +198,7 @@ test("shell-frame alignment: solid chrome rules + opaque token + wallpaper-in-co
   const tag = dom.styleTag("dsh-skins/openbmc.shell.css");
   assert.ok(tag, "shell alignment tag must mount with the skin");
   const lines = tag.textContent.split("\n");
-  assert.equal(lines.length, 8, "comment + 3 paint rules + 2 token rules + 2 content-wallpaper rules");
+  assert.equal(lines.length, 10, "comment + 3 paint rules + 2 token rules + 2 content-wallpaper rules + 2 right-panel rules");
   assert.equal(lines[0], "/* dsh-skins shell-frame alignment (ADR-0009): solid chrome + wallpaper in the conversation area on Windows desktop */");
   assert.equal(lines[1], 'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}');
   assert.equal(lines[2], 'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}');
@@ -209,6 +209,8 @@ test("shell-frame alignment: solid chrome rules + opaque token + wallpaper-in-co
   assert.ok(lines[6].startsWith(contentPrefix + "linear-gradient(rgba(247, 250, 252, 0.15) 0%, rgba(240, 246, 250, 0.28) 100%), url(data:image/webp;base64,"), "light content rule carries the scrim+art backdrop");
   assert.ok(lines[6].endsWith("background-size:cover;background-position:center;background-repeat:no-repeat}"));
   assert.ok(lines[7].startsWith('html[data-windows-titlebar] body[data-dsh-openbmc-skin][data-ds-dark-theme] [class*="_centerCol"]{background-image:linear-gradient('), "dark content rule present");
+  assert.equal(lines[8], 'html[data-windows-titlebar] body[data-dsh-openbmc-skin] [data-rightbar-col] [class*="_panel"]{background:rgb(238, 246, 251)!important}');
+  assert.equal(lines[9], 'html[data-windows-titlebar] body[data-dsh-openbmc-skin][data-ds-dark-theme] [data-rightbar-col] [class*="_panel"]{background:rgb(13, 30, 44)!important}');
   const stripImage = (line) => line.slice(line.indexOf("{") + 1).replace(/}$/, "").replace(/^background-image:/, "").replace(/;background-size:cover;background-position:center;background-repeat:no-repeat$/, "");
   assert.equal(tag.textContent, shellAlignment.buildShellAlignmentCss("dshOpenbmcSkin", {
     light: "rgb(238, 246, 251)",

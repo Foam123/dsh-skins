@@ -315,6 +315,9 @@ if (layout === "") {
 	if (!layout.includes("--dsh-windows-content-radius")) {
 		problems.push('shell-frame contract dead: "--dsh-windows-content-radius" no longer published by dsh-client-ui-layout — the 16px content-radius contract drifted (ADR-0009)');
 	}
+	if (!layout.includes("data-rightbar-col")) {
+		problems.push('shell-frame hook dead: "data-rightbar-col" no longer in dsh-client-ui-layout — the right-panel solid-backdrop anchor drifted (ADR-0009 v6)');
+	}
 }
 // ADR-0009 v2: the third neutralized paint lives on the ui-sidebar root
 // (its own `.<hash>_root` paints --dsw-specific-sidebar-fill inside the
