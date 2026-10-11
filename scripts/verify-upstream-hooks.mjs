@@ -329,7 +329,7 @@ if (sidebarPackage === "") {
 // ever match the AppFrame pair. Any OTHER package shipping a *_frame /
 // *_sidebarCol class selector is a new false-positive surface and forces a
 // re-review instead of silently widening the selectors.
-const SHELL_LOCAL_NAMES = ["frame", "sidebarCol"];
+const SHELL_LOCAL_NAMES = ["frame", "sidebarCol", "centerCol"];
 const shellInventory = new Map(); // local name -> Set<pkg>
 for (const name of SHELL_LOCAL_NAMES) {
 	// [A-Za-z0-9_]+ — hashes may be underscore-led (see section 7 note above).
@@ -357,7 +357,7 @@ for (const name of SHELL_LOCAL_NAMES) {
 			"dsh-client-ui-subagent",
 			"dsh-client-ui-user-questions",
 		])
-		: new Set(["dsh-client-ui-layout"]);
+		: new Set(["dsh-client-ui-layout", "dsh-client-ui-settings-shell"]);
 	const unexpected = [...found].filter((pkg) => !reviewed.has(pkg));
 	if (unexpected.length > 0) {
 		problems.push(`new *_${name} class selector in ${unexpected.join(", ")} — new false-positive surface for the ADR-0009 [class*="_${name}"] selectors, re-review them`);

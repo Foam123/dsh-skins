@@ -45,22 +45,33 @@ function parseRgbaChannels(value) {
 
 /**
  * Build the desktop shell alignment CSS for one skin: the three
- * single-paint rules plus the opaque shell-fill token override (light and
- * dark), scoped to the skin's body attribute. `opaqueFills` may be null when
- * the skin ships no fill override — the token rules are then skipped.
+ * single-paint rules, the opaque shell-fill token override (light and dark),
+ * and the wallpaper-in-content rules — the center column carries the same
+ * scrim+art backdrop the Web paints on body::before, so the conversation
+ * area keeps the skin's wallpaper while the chrome (strip, sidebar, notch,
+ * WCO buttons) stays one solid skin color. `opaqueFills`/`backdrop` may be
+ * null when the skin ships no fill override or no backdrop — the respective
+ * rules are then skipped.
  */
-function buildShellAlignmentCss(bodyAttribute, opaqueFills) {
+function buildShellAlignmentCss(bodyAttribute, opaqueFills, backdrop) {
   const body = `body[${datasetAttribute(bodyAttribute)}]`;
+  const scoped = `html[data-windows-titlebar] ${body}`;
   const lines = [
-    "/* dsh-skins shell-frame alignment (ADR-0009): single-paint + opaque shell on Windows desktop */",
+    "/* dsh-skins shell-frame alignment (ADR-0009): solid chrome + wallpaper in the conversation area on Windows desktop */",
     'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
     'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
     'html[data-windows-titlebar] [class*="_sidebarCol"] > [class*="_root"]{background:0 0}',
   ];
   if (opaqueFills !== null) {
     lines.push(
-      `html[data-windows-titlebar] ${body}{--dsw-specific-sidebar-fill:${opaqueFills.light}!important}`,
-      `html[data-windows-titlebar] ${body}[data-ds-dark-theme]{--dsw-specific-sidebar-fill:${opaqueFills.dark}!important}`,
+      `${scoped}{--dsw-specific-sidebar-fill:${opaqueFills.light}!important}`,
+      `${scoped}[data-ds-dark-theme]{--dsw-specific-sidebar-fill:${opaqueFills.dark}!important}`,
+    );
+  }
+  if (backdrop !== null && backdrop !== undefined && backdrop.imageLight !== null && backdrop.imageDark !== null) {
+    lines.push(
+      `${scoped} [class*="_centerCol"]{background-image:${backdrop.imageLight};background-size:cover;background-position:center;background-repeat:no-repeat}`,
+      `${scoped}[data-ds-dark-theme] [class*="_centerCol"]{background-image:${backdrop.imageDark}}`,
     );
   }
   return lines.join("\n");
@@ -294,10 +305,11 @@ export function createSkinRuntime() {
       }
 
       // Windows Desktop shell alignment (ADR-0009): emitted per skin — the
-      // opaque colors derive from the skin's own fill token — and
+      // opaque chrome color derives from the skin's own fill token and the
+      // conversation area carries the skin's own scrim+art backdrop — and
       // mount/unmount with the skin transaction like every other emitted
       // tag. Inert on Web (no titlebar marker) and gone with `official`
-      // (unmount restores the translucent translucent-free host paints).
+      // (unmount restores the host's translucent-capable paints).
       {
         const fills = effects.tokenOverrides?.["--dsw-specific-sidebar-fill"] ?? null;
         const lightFill = fills === null ? null : parseRgbaChannels(fills.light);
@@ -306,8 +318,12 @@ export function createSkinRuntime() {
           light: `rgb(${lightFill.r}, ${lightFill.g}, ${lightFill.b})`,
           dark: `rgb(${darkFill.r}, ${darkFill.g}, ${darkFill.b})`,
         } : null;
+        const backdrop = effects.backdrop === null ? null : {
+          imageLight: effects.backdrop.imageLight,
+          imageDark: effects.backdrop.imageDark,
+        };
         const tag = styleTag(`dsh-skins/${skin.id}.shell.css`,
-          buildShellAlignmentCss(effects.bodyAttribute, opaqueFills));
+          buildShellAlignmentCss(effects.bodyAttribute, opaqueFills, backdrop));
         stops.push(() => tag.remove());
       }
 

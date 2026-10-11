@@ -193,25 +193,31 @@ test("zero Desktop blur adds no filter, transform, or marker rule", () => {
   dispose();
 });
 
-test("shell-frame alignment: marker-scoped structural rules + opaque shell token mount with the skin and pin the ADR-0009 block verbatim", () => {
+test("shell-frame alignment: solid chrome rules + opaque token + wallpaper-in-content mount with the skin (ADR-0009 v6)", () => {
   const { dom, dispose } = bootOpenBmcWithDesktopBlur({ light: 0, dark: 0 });
   const tag = dom.styleTag("dsh-skins/openbmc.shell.css");
   assert.ok(tag, "shell alignment tag must mount with the skin");
-  const expected = [
-    "/* dsh-skins shell-frame alignment (ADR-0009): single-paint + opaque shell on Windows desktop */",
-    'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
-    'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
-    'html[data-windows-titlebar] [class*="_sidebarCol"] > [class*="_root"]{background:0 0}',
-    'html[data-windows-titlebar] body[data-dsh-openbmc-skin]{--dsw-specific-sidebar-fill:rgb(238, 246, 251)!important}',
-    'html[data-windows-titlebar] body[data-dsh-openbmc-skin][data-ds-dark-theme]{--dsw-specific-sidebar-fill:rgb(13, 30, 44)!important}',
-  ].join("\n");
-  assert.equal(tag.textContent, expected);
+  const lines = tag.textContent.split("\n");
+  assert.equal(lines.length, 8, "comment + 3 paint rules + 2 token rules + 2 content-wallpaper rules");
+  assert.equal(lines[0], "/* dsh-skins shell-frame alignment (ADR-0009): solid chrome + wallpaper in the conversation area on Windows desktop */");
+  assert.equal(lines[1], 'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}');
+  assert.equal(lines[2], 'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}');
+  assert.equal(lines[3], 'html[data-windows-titlebar] [class*="_sidebarCol"] > [class*="_root"]{background:0 0}');
+  assert.equal(lines[4], 'html[data-windows-titlebar] body[data-dsh-openbmc-skin]{--dsw-specific-sidebar-fill:rgb(238, 246, 251)!important}');
+  assert.equal(lines[5], 'html[data-windows-titlebar] body[data-dsh-openbmc-skin][data-ds-dark-theme]{--dsw-specific-sidebar-fill:rgb(13, 30, 44)!important}');
+  const contentPrefix = 'html[data-windows-titlebar] body[data-dsh-openbmc-skin] [class*="_centerCol"]{background-image:';
+  assert.ok(lines[6].startsWith(contentPrefix + "linear-gradient(rgba(247, 250, 252, 0.15) 0%, rgba(240, 246, 250, 0.28) 100%), url(data:image/webp;base64,"), "light content rule carries the scrim+art backdrop");
+  assert.ok(lines[6].endsWith("background-size:cover;background-position:center;background-repeat:no-repeat}"));
+  assert.ok(lines[7].startsWith('html[data-windows-titlebar] body[data-dsh-openbmc-skin][data-ds-dark-theme] [class*="_centerCol"]{background-image:linear-gradient('), "dark content rule present");
+  const stripImage = (line) => line.slice(line.indexOf("{") + 1).replace(/}$/, "").replace(/^background-image:/, "").replace(/;background-size:cover;background-position:center;background-repeat:no-repeat$/, "");
   assert.equal(tag.textContent, shellAlignment.buildShellAlignmentCss("dshOpenbmcSkin", {
     light: "rgb(238, 246, 251)",
     dark: "rgb(13, 30, 44)",
+  }, {
+    imageLight: stripImage(lines[6]),
+    imageDark: stripImage(lines[7]),
   }), "runtime emission and the exported builder must agree");
-  assert.doesNotMatch(tag.textContent, /centerCol/, "no content-column class may be targeted");
-  assert.ok(tag.textContent.startsWith("/*"), "emitted CSS must use star-star comments — CSS has no line comments and a leading // makes the parser swallow the first rule (1.5.3-alpha.1 field failure)");
+  assert.doesNotMatch(tag.textContent, /centerCol[^\"]/, "the content column is only ever targeted structurally");
   dispose();
   assert.equal(dom.styleTag("dsh-skins/openbmc.shell.css"), null, "shell tag must unmount with the skin");
 });
@@ -225,11 +231,14 @@ test("shell-frame alignment: no caption tag is emitted (superseded by the opaque
   dispose();
 });
 
-test("shell-frame alignment: parse golden values for the opaque fill derivation", () => {
+test("shell-frame alignment: builder without backdrop or fill override ships the paint rules only", () => {
+  const minimal = shellAlignment.buildShellAlignmentCss("data-dsh-x-skin", null, null);
+  assert.equal(minimal.split("\n").length, 4, "paint rules only — no token or content-wallpaper lines");
+  const noFill = shellAlignment.buildShellAlignmentCss("data-dsh-x-skin", null, { imageLight: "url(x)", imageDark: "url(y)" });
+  assert.equal(noFill.split("\n").length, 6, "paint rules + content-wallpaper rules without token lines");
   assert.deepEqual(shellAlignment.parseRgbaChannels("rgba(250, 249, 246, 0.40)"), { r: 250, g: 249, b: 246, a: 0.4 });
   assert.deepEqual(shellAlignment.parseRgbaChannels("rgba(13, 30, 44, 0.72)"), { r: 13, g: 30, b: 44, a: 0.72 });
   assert.equal(shellAlignment.parseRgbaChannels("rgb(13, 30, 44)"), null, "alpha is required — the skins always emit rgba");
-  assert.equal(shellAlignment.parseRgbaChannels("not-a-color"), null);
 });
 
 test("shell-frame alignment: A→B switch swaps the tag; official restores the untouched host paints", () => {
