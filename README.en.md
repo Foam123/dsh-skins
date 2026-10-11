@@ -107,6 +107,8 @@ Every skin's key visuals are open to adjustment. Click the gear button on a skin
 | **Slogan** | The new-session guidance line, one Chinese and one English copy | The skin's factory slogan |
 | **Translucency** | 0–100%, one value driving three visual layers: panel tint, wallpaper scrim and blur. 0% is pure, fully visible wallpaper; 100% hides it completely | meirenzhi 35, openbmc / uefi-harness 55 |
 
+> **On the Windows Desktop app (dsh Desktop)**: the shell chrome — sidebar, caption strip, right panel and window buttons — is the **opaque skin base color** and does not follow the translucency knob; the wallpaper is exposed inside the conversation area (center column), where the knob drives surface tint, scrim and blur. The Web keeps the original fully translucent form on every surface; the two environments are independent.
+
 ![Personalization panel — meirenzhi shown: built-in wallpaper grid, library upload, zh/en slogans and the translucency knob](docs/assets/preview-personalization.webp)
 
 ### Upload your own wallpaper (personal library)
@@ -173,6 +175,7 @@ Yes. Configuration and the library live in the `$DSH_HOME/dsh-skins/` data direc
 - Other skin plugins may also touch the body backdrop, brand slots or favicon; avoid enabling multiple visual skin plugins at the same time.
 - The `openbmc` brand slots reuse the OpenBMC project's official logo letterforms and brand gradient, used solely for identification; all rights remain with the OpenBMC project.
 - The `uefi-harness` mark is the UEFI Forum's official trademark (the red cube, from uefi.org's published uefi_logo_red.gif, embedded as vector paths traced via Wikimedia Commons "Logo of the UEFI Forum.svg"); it is used solely to identify the skin, and all rights remain with the UEFI Forum.
+- Windows Desktop known limits: after the right panel is closed/collapsed, the host keeps a reserved empty track (it shows the shell's dark base color and the conversation area does not expand) — host layout behavior, outside skin control; the fullscreen right panel is the solid skin base color without wallpaper blur (blurring would smear the panel's own contents, so it is intentionally omitted).
 
 ## License
 

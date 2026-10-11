@@ -107,6 +107,8 @@ dsh plugin --profile web remove @iasiv5/dsh-skins    # 卸载
 | **标语** | 新会话页的引导语，中文、英文各一份 | 皮肤出厂标语 |
 | **通透度** | 0–100% 单值联动三个视觉层：面板底色、壁纸遮罩、模糊。0% 纯壁纸完全透出，100% 完全遮蔽 | meirenzhi 35，openbmc / uefi-harness 55 |
 
+> **Windows Desktop（dsh Desktop 应用）上的形态**：桌面端外壳——侧栏、顶栏条、右栏面板与窗口按钮——为**不透明的皮肤本色**，不随通透度变化；壁纸在会话区（内容列）显露，通透度联动会话区内的表面底色、遮罩与模糊。Web 端维持全表面透纱的原有形态，两端互不影响。
+
 ![个性化面板 — 以美人志为例：内置壁纸网格、图库上传、中英标语与通透度旋钮](docs/assets/preview-personalization.webp)
 
 ### 上传自己的壁纸（个人图库）
@@ -173,6 +175,7 @@ URL 也能切皮肤：`/?skin=official`、`/?skin=openbmc`、`/?skin=uefi-harnes
 - 其他皮肤插件也可能修改 body 背景、品牌位或 favicon；应避免同时启用多个视觉皮肤插件。
 - `openbmc` 的品牌位沿用 OpenBMC 项目官方 logo 的字标字形与品牌渐变色，仅作标识用途，权利归 OpenBMC 项目所有。
 - `uefi-harness` 的标志为 UEFI Forum 官方商标（红色立方体，源自 uefi.org 发布的 uefi_logo_red.gif，经 Wikimedia Commons「Logo of the UEFI Forum.svg」矢量描摹嵌入），仅作标识用途，权利归 UEFI Forum 所有。
+- Windows Desktop 已知边界：右栏面板「收起/关闭」后，宿主保留一条空轨道（显示外壳深色底，会话区不扩展）——宿主布局行为，非皮肤可控；全屏面板为实色皮肤底、不带壁纸模糊（会模糊面板内全部内容，故不做）。
 
 ## License
 
