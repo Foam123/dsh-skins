@@ -307,13 +307,23 @@ if (layout === "") {
 		problems.push('shell-frame hook dead: "data-windows-titlebar" no longer in dsh-client-ui-layout — the public Desktop marker drifted (ADR-0009)');
 	}
 	for (const name of ["frame", "sidebarCol"]) {
-		if (!new RegExp(`\\.[A-Za-z0-9]+_${name}[{,:\\[.]`).test(layout)) {
+		// Hashes may be underscore-led (`_2H3hWW_root`, 0.2.0-rc.2 desktop build).
+		if (!new RegExp(`\\.[A-Za-z0-9_]+_${name}[{,:\\[.]`).test(layout)) {
 			problems.push(`shell-frame hook dead: no .*_${name} class selector in dsh-client-ui-layout — the AppFrame local name drifted, re-derive the ADR-0009 selectors`);
 		}
 	}
 	if (!layout.includes("--dsh-windows-content-radius")) {
 		problems.push('shell-frame contract dead: "--dsh-windows-content-radius" no longer published by dsh-client-ui-layout — the 16px content-radius contract drifted (ADR-0009)');
 	}
+}
+// ADR-0009 v2: the third neutralized paint lives on the ui-sidebar root
+// (its own `.<hash>_root` paints --dsw-specific-sidebar-fill inside the
+// column). Pin that painted-token line so the selector's premise is checked.
+const sidebarPackage = readAll("dsh-client-ui-sidebar");
+if (sidebarPackage === "") {
+	problems.push("dsh-client-ui-sidebar is not installed under the runtime — the ADR-0009 v2 sidebar-root hook cannot be evaluated");
+} else if (!/\.([A-Za-z0-9_]*)_root\{[^}]*background:var\(--dsw-specific-sidebar-fill\)/.test(sidebarPackage)) {
+	problems.push('shell-frame hook dead: the sidebar root no longer paints --dsw-specific-sidebar-fill — re-derive the ADR-0009 v2 [class*="_sidebarCol"] > [class*="_root"] rule');
 }
 // Page-wide inventory: [class*="_frame"] / [class*="_sidebarCol"] must only
 // ever match the AppFrame pair. Any OTHER package shipping a *_frame /
@@ -322,7 +332,8 @@ if (layout === "") {
 const SHELL_LOCAL_NAMES = ["frame", "sidebarCol"];
 const shellInventory = new Map(); // local name -> Set<pkg>
 for (const name of SHELL_LOCAL_NAMES) {
-	const pattern = new RegExp(`\\.[A-Za-z0-9]+_${name}[{,:\\[.]`);
+	// [A-Za-z0-9_]+ — hashes may be underscore-led (see section 7 note above).
+	const pattern = new RegExp(`\\.[A-Za-z0-9_]+_${name}[{,:\\[.]`);
 	const found = new Set();
 	for (const [pkg, files] of packages) {
 		for (const file of files) {

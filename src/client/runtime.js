@@ -14,6 +14,135 @@ function datasetAttribute(key) {
 }
 
 /** Create the registry and single-mounted-skin runtime. */
+// Windows Desktop shell-frame alignment (ADR-0009): with `data-windows-titlebar`
+// the host AppFrame paints `--dsw-specific-sidebar-fill` several times on the
+// caption/sidebar side (frame background + titlebar ::before + sidebar column
+// + the ui-sidebar root) while the content column's 16px corner notch shows
+// the frame background ONCE. Official tokens are opaque so the stacks are
+// invisible; translucent skin tokens turn the notch into a wallpaper-colored
+// petal (light AND dark, all skins). CSS cannot repaint the notch — the only
+// uniform state reachable is single-paint: drop the caption strip's, sidebar
+// column's and sidebar root's own fills and let the frame background carry
+// the surface everywhere (mirroring the darwin architecture, where the host
+// itself zeroes the frame and the sidebar-root backgrounds). All rules are
+// gated by the public `html[data-windows-titlebar]` marker (never matches
+// ordinary Web), pinned to structural css-modules local names
+// (`_frame` / `_sidebarCol` / `_root`, ADR-0006/0007 doctrine) with a
+// `:has(> [class*="_sidebarCol"])` anchor so only the host AppFrame matches;
+// scripts/verify-upstream-hooks.mjs (#7) fails `check` when those local names
+// or the painted-token line drift.
+const SHELL_ALIGNMENT_CSS = [
+  "// dsh-skins shell-frame single-paint alignment (ADR-0009)",
+  'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
+  'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
+  'html[data-windows-titlebar] [class*="_sidebarCol"] > [class*="_root"]{background:0 0}',
+].join("\n");
+
+// -- Windows caption probe alignment (ADR-0009 v2) ---------------------------
+// The win32 preload paints the native caption-button overlay (WCO) with the
+// computed backgroundColor of a hidden probe span it appends to the body,
+// styled `background-color:var(--dsw-specific-sidebar-fill)`, and re-sends on
+// every head/style/`data-ds-dark-theme` mutation (its own dedupe + ipc loop).
+// A translucent skin fill reaches that native surface without its wallpaper
+// backdrop, so the buttons render as an opaque rectangle in the fill's base
+// color. Feed the probe the OPAQUE composite of the fill over the wallpaper's
+// top-right region instead: a stylesheet `!important` beats the probe's
+// inline declaration, the preload observer picks the change up automatically,
+// and removing the style tag reverts to the host fallback. The composite is
+// correct whether the platform honors or ignores overlay alpha, because the
+// emitted color is always fully opaque. The probe hook is structural
+// (`span[style*="--dsw-specific-sidebar-fill"]`) but lives in the desktop
+// preload, not in the scanned runtime — a preload rework shows up as a visual
+// regression, re-derive there (no static guard possible).
+const CAPTION_PROBE_SELECTOR = 'span[style*="--dsw-specific-sidebar-fill"]';
+
+function parseRgbaChannels(value) {
+  const match = /^rgba?\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)$/i.exec(value ?? "");
+  if (match === null) return null;
+  const channels = [match[1], match[2], match[3], match[4]].map(Number);
+  if (channels.some((channel) => !Number.isFinite(channel))) return null;
+  const [r, g, b, a] = channels;
+  return { r, g, b, a: Math.min(1, Math.max(0, a)) };
+}
+
+function compositeOverBackdrop(fill, backdrop) {
+  const channel = (name) => Math.round(fill[name] * fill.a + backdrop[name] * (1 - fill.a));
+  return `rgb(${channel("r")}, ${channel("g")}, ${channel("b")})`;
+}
+
+function buildCaptionCss(composites) {
+  return [
+    "// dsh-skins caption probe alignment (ADR-0009 v2)",
+    `body:not([data-ds-dark-theme]) > ${CAPTION_PROBE_SELECTOR}{background-color:${composites.light}!important}`,
+    `body[data-ds-dark-theme] > ${CAPTION_PROBE_SELECTOR}{background-color:${composites.dark}!important}`,
+  ].join("\n");
+}
+
+// The buttons sample the wallpaper where they sit (top-right); a 32px
+// thumbnail approximates the runtime's blur, which preserves the local mean.
+const CAPTION_SAMPLE_SIZE = 32;
+const backdropSampleCache = new Map(); // url -> Promise<{r,g,b}|null>
+
+async function sampleBackdropTopRight(url) {
+  if (typeof Image === "undefined") return null;
+  const image = new Image();
+  image.src = url;
+  try {
+    await image.decode();
+  } catch {
+    return null; // broken/cross-tainted asset: fail closed, no override
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = CAPTION_SAMPLE_SIZE;
+  canvas.height = CAPTION_SAMPLE_SIZE;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (context === null) return null;
+  context.drawImage(image, 0, 0, CAPTION_SAMPLE_SIZE, CAPTION_SAMPLE_SIZE);
+  const x0 = Math.round(CAPTION_SAMPLE_SIZE * 0.6);
+  const height = Math.round(CAPTION_SAMPLE_SIZE * 0.3);
+  const width = CAPTION_SAMPLE_SIZE - x0;
+  const region = context.getImageData(x0, 0, width, height).data;
+  let r = 0, g = 0, b = 0;
+  const pixels = region.length / 4;
+  for (let index = 0; index < region.length; index += 4) {
+    r += region[index];
+    g += region[index + 1];
+    b += region[index + 2];
+  }
+  return { r: Math.round(r / pixels), g: Math.round(g / pixels), b: Math.round(b / pixels) };
+}
+
+function sampleBackdropCached(url) {
+  if (backdropSampleCache.size > 8) backdropSampleCache.clear();
+  if (!backdropSampleCache.has(url)) backdropSampleCache.set(url, sampleBackdropTopRight(url));
+  return backdropSampleCache.get(url);
+}
+
+async function alignCaptionProbe(effects, tag) {
+  try {
+    const fills = effects.tokenOverrides?.["--dsw-specific-sidebar-fill"] ?? null;
+    if (fills === null) return;
+    const lightFill = parseRgbaChannels(fills.light);
+    const darkFill = parseRgbaChannels(fills.dark);
+    if (lightFill === null || darkFill === null) return;
+    const imageLight = effects.backdrop?.imageLight ?? null;
+    const imageDark = effects.backdrop?.imageDark ?? null;
+    if (imageLight === null || imageDark === null) return;
+    const [lightBackdrop, darkBackdrop] = await Promise.all([
+      sampleBackdropCached(imageLight),
+      sampleBackdropCached(imageDark),
+    ]);
+    if (lightBackdrop === null || darkBackdrop === null) return;
+    // Commit atomically: both modes resolved, else the empty tag stays a no-op.
+    tag.textContent = buildCaptionCss({
+      light: compositeOverBackdrop(lightFill, lightBackdrop),
+      dark: compositeOverBackdrop(darkFill, darkBackdrop),
+    });
+  } catch {
+    // sampling is best-effort; the empty tag is the fail-closed state
+  }
+}
+
 export function createSkinRuntime() {
   const skins = new Map();
   const order = [];
@@ -167,25 +296,6 @@ export function createSkinRuntime() {
     return rules.length === 0 ? null : rules.join("\n");
   }
 
-// Windows Desktop shell-frame alignment (ADR-0009): with `data-windows-titlebar`
-// the host AppFrame paints `--dsw-specific-sidebar-fill` three times on the
-// caption/sidebar side (frame background + titlebar ::before + sidebar column)
-// while the content column's 16px corner notch shows the frame background ONCE.
-// Official tokens are opaque so the stacks are invisible; translucent skin
-// tokens turn the notch into a wallpaper-colored petal (light AND dark, all
-// skins). CSS cannot repaint the notch — the only uniform state reachable is
-// single-paint: drop the caption strip's and sidebar column's own fills and let
-// the frame background carry the surface everywhere. Both rules are gated by
-// the public `html[data-windows-titlebar]` marker (never matches ordinary Web),
-// pinned to structural css-modules local names (`_frame` / `_sidebarCol`,
-// ADR-0006/0007 doctrine) with a `:has(> [class*="_sidebarCol"])` anchor so
-// only the host AppFrame matches; scripts/verify-upstream-hooks.mjs (#7) fails
-// `check` when those local names drift.
-const SHELL_ALIGNMENT_CSS = [
-  "// dsh-skins shell-frame single-paint alignment (ADR-0009)",
-  'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
-  'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
-].join("\n");
 
   function variablesCss(effects) {
     if (effects.cssVariables === null) return null;
@@ -265,6 +375,18 @@ const SHELL_ALIGNMENT_CSS = [
       {
         const tag = styleTag(`dsh-skins/${skin.id}.shell.css`, SHELL_ALIGNMENT_CSS);
         stops.push(() => tag.remove());
+      }
+
+      // Windows caption probe alignment (ADR-0009 v2): the probe and its ipc
+      // loop only exist under the win32 preload, keyed by the same public
+      // marker. The tag is created empty and filled asynchronously by the
+      // wallpaper sampler — a failed sample keeps the empty no-op, removal
+      // reverts the overlay to the host fallback through the preload observer.
+      if (typeof document !== "undefined"
+        && document.documentElement?.hasAttribute?.("data-windows-titlebar") === true) {
+        const tag = styleTag(`dsh-skins/${skin.id}.caption.css`, "");
+        stops.push(() => tag.remove());
+        void alignCaptionProbe(effects, tag);
       }
 
       const backdrop = backdropCss(effects);
@@ -494,3 +616,7 @@ const SHELL_ALIGNMENT_CSS = [
     active: () => selectedId,
   };
 }
+
+// Pure helpers of the caption alignment, exported for golden tests (the DOM
+// stub cannot execute the Image/canvas sampling path).
+export const captionAlignment = { parseRgbaChannels, compositeOverBackdrop, buildCaptionCss };

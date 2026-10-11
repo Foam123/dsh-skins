@@ -33,12 +33,22 @@ test("Desktop backdrop bundle carries the public marker and all stable skin scop
 test("shell-frame alignment ships exactly once, marker-gated, structural local names only (ADR-0009)", () => {
   const STRIP = 'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}';
   const COLUMN = 'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}';
+  const ROOT = 'html[data-windows-titlebar] [class*="_sidebarCol"] > [class*="_root"]{background:0 0}';
   // Runtime-level emission: one copy for all skins, mounted per skin at runtime.
   assert.equal(client.split(STRIP).length - 1, 1, "caption-strip single-paint rule");
   assert.equal(client.split(COLUMN).length - 1, 1, "sidebar-column single-paint rule");
+  assert.equal(client.split(ROOT).length - 1, 1, "sidebar-root single-paint rule (v2: the ui-sidebar root paints the fill again inside the column)");
+  // The probe rules are template literals around CAPTION_PROBE_SELECTOR — the
+  // bundler keeps the selector as ONE const the templates reference, so pin
+  // the pieces instead of a contiguous string (the golden test in
+  // runtime-effects pins the exact rendered block).
+  assert.equal(client.split('span[style*="--dsw-specific-sidebar-fill"]').length - 1, 1, "probe selector const ships once and the templates reference it");
+  assert.ok(client.includes('body:not([data-ds-dark-theme]) > '), "caption probe light anchor");
+  assert.ok(client.includes('body[data-ds-dark-theme] > '), "caption probe dark anchor");
+  assert.ok(client.includes('!important}'), "probe overrides must stay !important (beats the probe's inline declaration)");
   // ADR-0006 doctrine: exact hashed pins are banned; structural local names
   // ([class*="_local"]) are allowed and pinned by scripts/verify-upstream-hooks.mjs.
-  assert.ok(!/[A-Za-z0-9]{2,}_(frame|sidebarCol)/.test(client), "a hashed host class got pinned — that is the ADR-0006 failure mode");
+  assert.ok(!/[A-Za-z0-9]{2,}_(frame|sidebarCol|root)/.test(client), "a hashed host class got pinned — that is the ADR-0006 failure mode");
 });
 
 test("bubble decoration: the dead rc.2 hash gdEzaW must never return", () => {

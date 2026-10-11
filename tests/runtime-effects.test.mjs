@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSkinRuntime } from "../src/client/runtime.js";
+import { createSkinRuntime, captionAlignment } from "../src/client/runtime.js";
 import { createOpenBmcHarness } from "../src/client/skins/openbmc-harness/index.js";
 import { createMeirenzhiSkin } from "../src/client/skins/meirenzhi/index.js";
 
@@ -201,10 +201,47 @@ test("shell-frame alignment: marker-scoped structural rules mount with the skin 
     "// dsh-skins shell-frame single-paint alignment (ADR-0009)",
     'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
     'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
+    'html[data-windows-titlebar] [class*="_sidebarCol"] > [class*="_root"]{background:0 0}',
   ]);
   assert.doesNotMatch(tag.textContent, /centerCol/, "no content-column class may be targeted");
   dispose();
   assert.equal(dom.styleTag("dsh-skins/openbmc.shell.css"), null, "shell tag must unmount with the skin");
+});
+
+test("caption probe alignment: Web never mounts the tag; Desktop mounts it empty until sampled and tears it down", () => {
+  // The shared stub has no documentElement → no titlebar marker → Web no-op.
+  const web = installDom();
+  const webBoot = bootMeirenzhi(web);
+  assert.equal(web.styleTag("dsh-skins/meirenzhi.caption.css"), null, "Web must not emit a caption tag");
+
+  // Desktop stub: html carries the marker.
+  const dom = installDom();
+  dom.document.documentElement = Object.assign(makeNode("html"), {
+    hasAttribute: (name) => name === "data-windows-titlebar",
+  });
+  const { runtime, dispose } = bootMeirenzhi(dom);
+  const tag = dom.styleTag("dsh-skins/meirenzhi.caption.css");
+  assert.ok(tag, "caption tag must mount under the Desktop marker");
+  assert.equal(tag.textContent, "", "sampling is unavailable in the stub — fail-closed empty tag");
+  runtime.select("official");
+  assert.equal(dom.styleTag("dsh-skins/meirenzhi.caption.css"), null, "official must drop the caption tag");
+  dispose();
+});
+
+test("caption probe alignment: parse, composite, and CSS builder golden values", () => {
+  assert.deepEqual(captionAlignment.parseRgbaChannels("rgba(250, 249, 246, 0.40)"), { r: 250, g: 249, b: 246, a: 0.4 });
+  assert.deepEqual(captionAlignment.parseRgbaChannels("rgba(13, 30, 44, 0.72)"), { r: 13, g: 30, b: 44, a: 0.72 });
+  assert.equal(captionAlignment.parseRgbaChannels("rgb(13, 30, 44)"), null, "alpha is required — the skins always emit rgba");
+  assert.equal(captionAlignment.parseRgbaChannels("not-a-color"), null);
+  // meirenzhi dark fill over a reddish wallpaper region.
+  assert.equal(captionAlignment.compositeOverBackdrop({ r: 18, g: 18, b: 26, a: 0.72 }, { r: 90, g: 45, b: 50 }), "rgb(38, 26, 33)");
+  // alpha clamping cannot push a channel out of range.
+  assert.equal(captionAlignment.compositeOverBackdrop({ r: 250, g: 249, b: 246, a: 1 }, { r: 5, g: 5, b: 5 }), "rgb(250, 249, 246)");
+  assert.equal(captionAlignment.buildCaptionCss({ light: "rgb(1, 2, 3)", dark: "rgb(4, 5, 6)" }), [
+    "// dsh-skins caption probe alignment (ADR-0009 v2)",
+    'body:not([data-ds-dark-theme]) > span[style*="--dsw-specific-sidebar-fill"]{background-color:rgb(1, 2, 3)!important}',
+    'body[data-ds-dark-theme] > span[style*="--dsw-specific-sidebar-fill"]{background-color:rgb(4, 5, 6)!important}',
+  ].join("\n"));
 });
 
 test("shell-frame alignment: A→B switch swaps the tag; official restores the untouched host paints", () => {
