@@ -182,47 +182,31 @@ async function sampleBackdropCached(url, fill, scrim) {
   return backdropSampleCache.get(url);
 }
 
-function findCaptionProbe() {
-  if (typeof document === "undefined") return null;
-  for (const span of document.querySelectorAll("body > span")) {
-    if ((span.getAttribute("style") ?? "").includes("--dsw-specific-sidebar-fill")) return span;
-  }
-  return null;
-}
-
 async function alignCaptionProbe(effects, tag) {
-  // The probe span, like the titlebar marker, is installed by the preload
-  // around DOMContentLoaded and may appear AFTER the skin mounts — poll for
-  // it briefly instead of a single mount-time check (the alpha.2 field
-  // failure). On ordinary Web the probe never appears and the loop burns
-  // ~4s of an idle async task before leaving the empty no-op tag.
-  const attempts = 6;
+  // No probe-presence check here — CSS rules are declarative, so writing them
+  // before the preload installs its probe span is fine (they apply the moment
+  // it appears; alpha.2/alpha.3 lost to exactly this timing race twice: first
+  // a titlebar-marker gate, then a probe-presence bail). On ordinary Web the
+  // selector matches nothing, so the filled tag stays an inert no-op.
   try {
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 750));
-      if (findCaptionProbe() === null) continue;
-      const fills = effects.tokenOverrides?.["--dsw-specific-sidebar-fill"] ?? null;
-      if (fills === null) { tag.dataset.captionState = "no-fill-token"; return; }
-      const lightFill = parseRgbaChannels(fills.light);
-      const darkFill = parseRgbaChannels(fills.dark);
-      if (lightFill === null || darkFill === null) { tag.dataset.captionState = "bad-fill-token"; return; }
-      const imageLight = effects.backdrop?.imageLight ?? null;
-      const imageDark = effects.backdrop?.imageDark ?? null;
-      if (imageLight === null || imageDark === null) { tag.dataset.captionState = "no-backdrop"; return; }
-      const [lightBackdrop, darkBackdrop] = await Promise.all([
-        sampleBackdropCached(imageLight, lightFill, parseScrimStops(imageLight)),
-        sampleBackdropCached(imageDark, darkFill, parseScrimStops(imageDark)),
-      ]);
-      if (lightBackdrop === null || darkBackdrop === null) continue; // transient decode failure — retry
-      // Commit atomically: both modes resolved, else the empty tag stays a no-op.
-      tag.textContent = buildCaptionCss({
-        light: compositeOverBackdrop(lightFill, lightBackdrop),
-        dark: compositeOverBackdrop(darkFill, darkBackdrop),
-      });
-      tag.dataset.captionState = "filled";
-      return;
-    }
-    tag.dataset.captionState = "no-probe";
+    const fills = effects.tokenOverrides?.["--dsw-specific-sidebar-fill"] ?? null;
+    if (fills === null) { tag.dataset.captionState = "no-fill-token"; return; }
+    const lightFill = parseRgbaChannels(fills.light);
+    const darkFill = parseRgbaChannels(fills.dark);
+    if (lightFill === null || darkFill === null) { tag.dataset.captionState = "bad-fill-token"; return; }
+    const imageLight = effects.backdrop?.imageLight ?? null;
+    const imageDark = effects.backdrop?.imageDark ?? null;
+    if (imageLight === null || imageDark === null) { tag.dataset.captionState = "no-backdrop"; return; }
+    const [lightBackdrop, darkBackdrop] = await Promise.all([
+      sampleBackdropCached(imageLight, lightFill, parseScrimStops(imageLight)),
+      sampleBackdropCached(imageDark, darkFill, parseScrimStops(imageDark)),
+    ]);
+    if (lightBackdrop === null || darkBackdrop === null) { tag.dataset.captionState = "sample-failed"; return; }
+    tag.textContent = buildCaptionCss({
+      light: compositeOverBackdrop(lightFill, lightBackdrop),
+      dark: compositeOverBackdrop(darkFill, darkBackdrop),
+    });
+    tag.dataset.captionState = "filled";
   } catch {
     tag.dataset.captionState = "failed";
     // sampling is best-effort; the empty tag is the fail-closed state
@@ -463,12 +447,14 @@ export function createSkinRuntime() {
         stops.push(() => tag.remove());
       }
 
-      // Windows caption probe alignment (ADR-0009 v2/v3): the tag mounts
-      // UNCONDITIONALLY — the win32 preload sets the titlebar marker around
-      // DOMContentLoaded, which can land AFTER the skin mounts, so gating on
-      // the marker here mis-times (the 1.5.3-alpha.1 field failure). On
-      // ordinary Web no probe span exists, alignCaptionProbe bails, and the
-      // empty tag is an inert no-op; teardown always removes it.
+      // Windows caption probe alignment (ADR-0009 v2–v4): the tag mounts
+      // UNCONDITIONALLY and gets filled by the sampler — CSS is declarative,
+      // so the rules apply the instant the preload's probe span appears,
+      // whenever that is. Never gate this on mount-time state: both the
+      // titlebar marker and the probe span appear AFTER the skin mounts, and
+      // two field releases (alpha.1 marker gate, alpha.2/3 presence checks)
+      // lost to that race. On ordinary Web the selector matches nothing, so
+      // the filled tag is an inert no-op; teardown always removes it.
       {
         const tag = styleTag(`dsh-skins/${skin.id}.caption.css`, "");
         stops.push(() => tag.remove());
