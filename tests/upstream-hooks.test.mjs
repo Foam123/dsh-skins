@@ -38,14 +38,11 @@ test("shell-frame alignment ships exactly once, marker-gated, structural local n
   assert.equal(client.split(STRIP).length - 1, 1, "caption-strip single-paint rule");
   assert.equal(client.split(COLUMN).length - 1, 1, "sidebar-column single-paint rule");
   assert.equal(client.split(ROOT).length - 1, 1, "sidebar-root single-paint rule (v2: the ui-sidebar root paints the fill again inside the column)");
-  // The probe rules are template literals around CAPTION_PROBE_SELECTOR — the
-  // bundler keeps the selector as ONE const the templates reference, so pin
-  // the pieces instead of a contiguous string (the golden test in
-  // runtime-effects pins the exact rendered block).
-  assert.equal(client.split('span[style*="--dsw-specific-sidebar-fill"]').length - 1, 1, "probe selector const ships once and the templates reference it");
-  assert.ok(client.includes('body:not([data-ds-dark-theme]) > '), "caption probe light anchor");
-  assert.ok(client.includes('body[data-ds-dark-theme] > '), "caption probe dark anchor");
-  assert.ok(client.includes('!important}'), "probe overrides must stay !important (beats the probe's inline declaration)");
+  // v4: the opaque shell-fill token override (light + dark template pair).
+  assert.ok(client.includes("html[data-windows-titlebar] ${body}{--dsw-specific-sidebar-fill:"), "opaque token override template ships");
+  assert.ok(client.includes("[data-ds-dark-theme]{--dsw-specific-sidebar-fill:"), "dark variant of the opaque token override ships");
+  assert.ok(client.includes("!important}"), "the token override must stay !important (beats the theme's published value)");
+  assert.ok(!client.includes("caption.css"), "the caption sampler machinery is gone (superseded by the opaque token)");
   // ADR-0006 doctrine: exact hashed pins are banned; structural local names
   // ([class*="_local"]) are allowed and pinned by scripts/verify-upstream-hooks.mjs.
   assert.ok(!/[A-Za-z0-9]{2,}_(frame|sidebarCol|root)/.test(client), "a hashed host class got pinned — that is the ADR-0006 failure mode");

@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSkinRuntime, captionAlignment } from "../src/client/runtime.js";
+import { createSkinRuntime, shellAlignment } from "../src/client/runtime.js";
 import { createOpenBmcHarness } from "../src/client/skins/openbmc-harness/index.js";
 import { createMeirenzhiSkin } from "../src/client/skins/meirenzhi/index.js";
 
@@ -193,49 +193,43 @@ test("zero Desktop blur adds no filter, transform, or marker rule", () => {
   dispose();
 });
 
-test("shell-frame alignment: marker-scoped structural rules mount with the skin and pin the ADR-0009 block verbatim", () => {
+test("shell-frame alignment: marker-scoped structural rules + opaque shell token mount with the skin and pin the ADR-0009 block verbatim", () => {
   const { dom, dispose } = bootOpenBmcWithDesktopBlur({ light: 0, dark: 0 });
   const tag = dom.styleTag("dsh-skins/openbmc.shell.css");
   assert.ok(tag, "shell alignment tag must mount with the skin");
-  assert.deepEqual(tag.textContent.split("\n"), [
-    "/* dsh-skins shell-frame single-paint alignment (ADR-0009) */",
+  const expected = [
+    "/* dsh-skins shell-frame alignment (ADR-0009): single-paint + opaque shell on Windows desktop */",
     'html[data-windows-titlebar] [class*="_frame"]:has(> [class*="_sidebarCol"])::before{background:0 0}',
     'html[data-windows-titlebar] [class*="_frame"] > [class*="_sidebarCol"]{background:0 0}',
     'html[data-windows-titlebar] [class*="_sidebarCol"] > [class*="_root"]{background:0 0}',
-  ]);
+    'html[data-windows-titlebar] body[data-dsh-openbmc-skin]{--dsw-specific-sidebar-fill:rgb(238, 246, 251)!important}',
+    'html[data-windows-titlebar] body[data-dsh-openbmc-skin][data-ds-dark-theme]{--dsw-specific-sidebar-fill:rgb(13, 30, 44)!important}',
+  ].join("\n");
+  assert.equal(tag.textContent, expected);
+  assert.equal(tag.textContent, shellAlignment.buildShellAlignmentCss("dshOpenbmcSkin", {
+    light: "rgb(238, 246, 251)",
+    dark: "rgb(13, 30, 44)",
+  }), "runtime emission and the exported builder must agree");
   assert.doesNotMatch(tag.textContent, /centerCol/, "no content-column class may be targeted");
   assert.ok(tag.textContent.startsWith("/*"), "emitted CSS must use star-star comments — CSS has no line comments and a leading // makes the parser swallow the first rule (1.5.3-alpha.1 field failure)");
   dispose();
   assert.equal(dom.styleTag("dsh-skins/openbmc.shell.css"), null, "shell tag must unmount with the skin");
 });
 
-test("caption probe alignment: tag mounts everywhere but stays empty without a probe span; teardown removes it", () => {
-  // The stub has no probe span (the win32 preload appends it) — the sampler
-  // bails and the tag is an inert no-op on Web AND Desktop stubs alike.
+test("shell-frame alignment: no caption tag is emitted (superseded by the opaque shell token, ADR-0009 v4)", () => {
   const dom = installDom();
   const { runtime, dispose } = bootMeirenzhi(dom);
-  const tag = dom.styleTag("dsh-skins/meirenzhi.caption.css");
-  assert.ok(tag, "caption tag must mount unconditionally (v3: the marker gate mis-timed on Desktop)");
-  assert.equal(tag.textContent, "", "no probe span → sampler bails → empty fail-closed tag");
+  assert.equal(dom.styleTag("dsh-skins/meirenzhi.caption.css"), null, "the caption sampler machinery is gone");
   runtime.select("official");
-  assert.equal(dom.styleTag("dsh-skins/meirenzhi.caption.css"), null, "official must drop the caption tag");
+  assert.equal(dom.styleTag("dsh-skins/meirenzhi.shell.css"), null, "official must drop the alignment so the untouched host paints stand alone");
   dispose();
 });
 
-test("caption probe alignment: parse, composite, and CSS builder golden values", () => {
-  assert.deepEqual(captionAlignment.parseRgbaChannels("rgba(250, 249, 246, 0.40)"), { r: 250, g: 249, b: 246, a: 0.4 });
-  assert.deepEqual(captionAlignment.parseRgbaChannels("rgba(13, 30, 44, 0.72)"), { r: 13, g: 30, b: 44, a: 0.72 });
-  assert.equal(captionAlignment.parseRgbaChannels("rgb(13, 30, 44)"), null, "alpha is required — the skins always emit rgba");
-  assert.equal(captionAlignment.parseRgbaChannels("not-a-color"), null);
-  // meirenzhi dark fill over a reddish wallpaper region.
-  assert.equal(captionAlignment.compositeOverBackdrop({ r: 18, g: 18, b: 26, a: 0.72 }, { r: 90, g: 45, b: 50 }), "rgb(38, 26, 33)");
-  // alpha clamping cannot push a channel out of range.
-  assert.equal(captionAlignment.compositeOverBackdrop({ r: 250, g: 249, b: 246, a: 1 }, { r: 5, g: 5, b: 5 }), "rgb(250, 249, 246)");
-  assert.equal(captionAlignment.buildCaptionCss({ light: "rgb(1, 2, 3)", dark: "rgb(4, 5, 6)" }), [
-    "/* dsh-skins caption probe alignment (ADR-0009 v2) */",
-    'body:not([data-ds-dark-theme]) > span[style*="--dsw-specific-sidebar-fill"]{background-color:rgb(1, 2, 3)!important}',
-    'body[data-ds-dark-theme] > span[style*="--dsw-specific-sidebar-fill"]{background-color:rgb(4, 5, 6)!important}',
-  ].join("\n"));
+test("shell-frame alignment: parse golden values for the opaque fill derivation", () => {
+  assert.deepEqual(shellAlignment.parseRgbaChannels("rgba(250, 249, 246, 0.40)"), { r: 250, g: 249, b: 246, a: 0.4 });
+  assert.deepEqual(shellAlignment.parseRgbaChannels("rgba(13, 30, 44, 0.72)"), { r: 13, g: 30, b: 44, a: 0.72 });
+  assert.equal(shellAlignment.parseRgbaChannels("rgb(13, 30, 44)"), null, "alpha is required — the skins always emit rgba");
+  assert.equal(shellAlignment.parseRgbaChannels("not-a-color"), null);
 });
 
 test("shell-frame alignment: A→B switch swaps the tag; official restores the untouched host paints", () => {
@@ -257,13 +251,12 @@ test("N1: a successful hot-update keeps the live skin fully intact", () => {
     css: dom.styleTag("dsh-skins/meirenzhi.css"),
     backdrop: dom.styleTag("dsh-skins/meirenzhi.backdrop.css"),
     shell: dom.styleTag("dsh-skins/meirenzhi.shell.css"),
-    caption: dom.styleTag("dsh-skins/meirenzhi.caption.css"),
     attr: dom.document.body.dataset.dshMeirenzhiSkin !== undefined,
     slogan: ctx.locale.dicts.get("conversation").get("zh")["hero.headline"],
     layer: ctx.layers.get("dsh-skins/meirenzhi"),
     title: dom.document.title,
   };
-  assert.ok(before.css && before.backdrop && before.attr && before.layer && before.shell && before.caption);
+  assert.ok(before.css && before.backdrop && before.attr && before.layer && before.shell);
   assert.equal(before.slogan, "风起凡尘 · 红颜问道");
   assert.equal(before.title, "标题实验 — 美人志");
 
@@ -274,7 +267,6 @@ test("N1: a successful hot-update keeps the live skin fully intact", () => {
   assert.ok(dom.styleTag("dsh-skins/meirenzhi.css"), "skin css tag must survive");
   assert.ok(dom.styleTag("dsh-skins/meirenzhi.backdrop.css"), "backdrop tag must survive");
   assert.ok(dom.styleTag("dsh-skins/meirenzhi.shell.css"), "shell alignment tag must survive");
-  assert.ok(dom.styleTag("dsh-skins/meirenzhi.caption.css"), "caption tag must survive");
   assert.equal(dom.document.body.dataset.dshMeirenzhiSkin !== undefined, true, "body scope attr must survive");
   assert.equal(ctx.locale.dicts.get("conversation").get("zh")["hero.headline"], "风起凡尘 · 红颜问道");
   assert.ok(ctx.layers.get("dsh-skins/meirenzhi"), "token layer must survive");
