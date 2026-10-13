@@ -369,8 +369,9 @@ test("⑩ shell is clamped to the space above its anchor; panel column scrolls; 
     "级联契约：sweep 裁剪必须晚于宽壳滚动规则");
   assert.ok(css.endsWith(PANEL_CSS),
     "组合契约：单标签以 [SHELL, PANEL] 收尾");
-  assert.ok(css.includes("min-width:0;width:360px;flex:none"),
-    "list column width is fixed in the BASE rule — the instant wide-class flip on collapse cannot resize it");
+  assert.ok(css.includes("min-width:0;width:min(360px,100%);flex:none"),
+    "list column stays exactly 360px wherever the 390px shell fits, and shrinks only below a 414px viewport " +
+    "(a fixed 360px column overflowed narrower pops and clipped the gear column)");
   assert.ok(css.includes(".dsh-skins-pop{transition:none}"),
     "reduced-motion skips the width animation");
   assert.ok(
@@ -385,6 +386,28 @@ test("⑩ shell is clamped to the space above its anchor; panel column scrolls; 
   const tiny = makeHarness(260);
   await tiny.openShell();
   assert.equal(tiny.shell().props.style.maxHeight, 220, "very short viewports keep a usable floor, never a negative/zero clamp");
+});
+
+test("⑩c phone (<414px): list pop clamps inside the viewport; the 360px list column shrinks instead of overflowing (齿轮截半回归)", async () => {
+  const h = makeHarness(700, 392);
+  // A rail trigger 44px from the left edge → box.left = 48; the pop may not
+  // follow it verbatim: avail = min(390, 392-32) = 360 → maxLeft = 392-360-16.
+  h.switcherButton().getBoundingClientRect = () => ({ left: 44, top: 640, width: 36, height: 36 });
+  await h.openShell();
+  assert.equal(h.shell().props.style.left, 16,
+    "list pop clamps to the 16px margin instead of hugging the trigger past the right edge");
+  assert.equal(h.shell().props.style.bottom, 68, "bottom anchoring is untouched by the left clamp");
+  // Anchor semantics survive wherever the trigger fits: desktop list pop.
+  const wide = makeHarness(900, 1400);
+  wide.switcherButton().getBoundingClientRect = () => ({ left: 44, top: 840, width: 36, height: 36 });
+  await wide.openShell();
+  assert.equal(wide.shell().props.style.left, 48, "desktop: the verbatim trigger anchor is preserved (clamp no-ops)");
+  const css = h.cssText();
+  assert.ok(css.includes("width:min(390px,calc(100vw - 32px))"),
+    "phone pop reserves 16px margins per side (稍微小一点); viewports ≥414px still get the 390px cap");
+  assert.ok(css.includes("min-width:0;width:min(360px,100%);flex:none"),
+    "the list column shrinks on sub-414px viewports — a fixed 360px column was the horizontal overflow");
+  assert.ok(!css.includes("min-width:0;width:360px;flex:none"), "the unshrinkable 360px column literal is gone");
 });
 
 test("⑩b stacked sheet: panel-open popover becomes a near-full-viewport sheet (窄视窗回归)", async () => {

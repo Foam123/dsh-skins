@@ -150,7 +150,13 @@ const SHELL_CSS = [
   // 毛玻璃弹层（dsh-quota-watch 同款配方）：86% 不透明底 + blur14 提饱和，
   // 下层文字被底色盖住、只余柔光，弹层文字保持清晰可读；首条 solid 声明
   // 兜底不支持 color-mix 的浏览器。
-  '.dsh-skins-pop{position:fixed;z-index:60;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:min(390px,calc(100vw - 24px));max-height:calc(100vh - 24px);padding:14px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-elevated,var(--dsw-alias-bg-overlay));background:color-mix(in srgb,var(--dsw-alias-bg-base,#1f1f1f) 86%,transparent);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.14));overflow-y:auto;transition:width .2s ease-out}',
+  // Width term reserves 16px margins per side on sub-414px viewports (the
+  // 390px cap keeps every wider viewport untouched). The old 24px term left
+  // only ~10px of right margin once the trigger-anchored left offset was
+  // paid, and — combined with the fixed 360px list column — clipped the
+  // gear column at the pop's own edge on phones (field report 2026-10-14:
+  // 手机上齿轮被截半 + 横向滚动条).
+  '.dsh-skins-pop{position:fixed;z-index:60;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:min(390px,calc(100vw - 32px));max-height:calc(100vh - 24px);padding:14px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-elevated,var(--dsw-alias-bg-overlay));background:color-mix(in srgb,var(--dsw-alias-bg-base,#1f1f1f) 86%,transparent);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.14));overflow-y:auto;transition:width .2s ease-out}',
   // Slim themed scrollbars for the shell's own scroll region (list-only
   // popover): thin + token-colored thumb, WebKit and Firefox both covered.
   '.dsh-skins-pop{scrollbar-width:thin;scrollbar-color:var(--dsw-alias-border-l2) transparent}',
@@ -196,7 +202,11 @@ const SHELL_CSS = [
   'body[data-ds-dark-theme]:not([data-dsh-meirenzhi-skin]):not([data-dsh-openbmc-skin]):not([data-dsh-uefi-harness]) .dsh-skins-pop{background:rgba(41,42,44,0.97)}',
   // -- combined shell (Q44/Q46): list column + docked panel column ----------
   '.dsh-skins-pop.dsh-skins-wide{flex-direction:row;align-items:stretch;width:min(1105px,calc(100vw - 24px))}',
-  '.dsh-skins-pop-main{display:flex;flex-direction:column;gap:8px;min-width:0;width:360px;flex:none}',
+  // List column: exactly 360px wherever the 390px narrow shell fits (the
+  // v2.5 宽度恒定 ruling #10/#11), shrinking only BELOW a 414px viewport —
+  // a fixed 360px column inside a narrower pop overflowed horizontally and
+  // pushed the gear column behind the pop's right edge (same field report).
+  '.dsh-skins-pop-main{display:flex;flex-direction:column;gap:8px;min-width:0;width:min(360px,100%);flex:none}',
   '.dsh-skins-pop.dsh-skins-wide .dsh-skins-pop-main{flex:0 0 360px}',
   // box-sizing is NOT inherited: without border-box here, the sweep's
   // measured rect width feeds flex-basis as a CONTENT width (+15px padding/
@@ -501,7 +511,16 @@ export function installSidebarSwitcher(ctx, { runtime, jsx, react, reactDom, con
     const shellLeft = box === null ? undefined
       : showPersonalization && typeof window !== "undefined"
         ? Math.max(12, Math.min(box.left, window.innerWidth - 1117))
-        : box.left;
+        : typeof window !== "undefined"
+          // List-only shell: the rail trigger sits ~14px from the left edge
+          // while the pop is up to (100vw - 32px) wide — anchoring verbatim
+          // spent that margin asymmetrically (10px right) and, on sub-414px
+          // viewports, pushed the gear column against the screen edge (field
+          // report 2026-10-14: 手机上齿轮被截半). Clamp to the same 16px
+          // margin the width term reserves, mirroring the wide branch above;
+          // wherever the trigger fits, the anchor is preserved verbatim.
+          ? Math.max(16, Math.min(box.left, window.innerWidth - Math.min(390, window.innerWidth - 32) - 16))
+          : box.left;
     // Clamp the shell to the space actually available ABOVE its bottom
     // anchor: the CSS max-height(100vh-24px) alone ignores the anchor
     // offset, so a tall panel slides its top off-screen with the content
