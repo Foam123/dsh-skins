@@ -266,6 +266,48 @@ export function createSkinRuntime({ profile = "web" } = {}) {
     return `${selector}{${light.join(";")}}\n${darkSelector}{${dark.join(";")}}`;
   }
 
+  // Third-party brand coexistence (2026-10-13 ds-bot incident): third-party
+  // plugins copy the "obvious" priority -10 for the single brand seats. A
+  // latecomer registering the SAME priority on a single slot throws inside
+  // its own apply() and its whole activation dies (cordis fiber state=3), so
+  // dsh-skins must never sit on the magnet value. We claim a deep, unlikely
+  // base seat instead and probe the slot ledger before registering: blind
+  // -10 latecomers then register cleanly and get shadowed ("lowest
+  // renders") instead of crashing.
+  const BRAND_PRIORITY_BASE = -20;
+
+  function occupantPriorities(name) {
+    try {
+      return (ctx.slots.entries?.(name) ?? []).map((entry) => entry.options.priority ?? 0);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * register() wrapped for coexistence: an equal-priority single-slot
+   * conflict is a cosmetic loss (one brand seat), never worth failing the
+   * skin mount. Probe the ledger for a free seat below BRAND_PRIORITY_BASE,
+   * and on a racing conflict retry deeper a bounded number of times; if the
+   * seat stays contested, leave it to its occupant and mount the skin
+   * without it. Unknown errors still throw (buildEffects unwinds them).
+   */
+  function registerBrandSeat(name, component) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const taken = occupantPriorities(name);
+      const floor = taken.length > 0 ? Math.min(...taken) - 1 : BRAND_PRIORITY_BASE;
+      const priority = Math.min(BRAND_PRIORITY_BASE, floor);
+      try {
+        return ctx.slots.register({ name, priority }, component);
+      } catch (error) {
+        if (!/already has a registration/.test(String(error?.message ?? error))) throw error;
+        console.warn(`[dsh-skins] brand seat "${name}" priority ${priority} taken; retrying deeper`);
+      }
+    }
+    console.warn(`[dsh-skins] brand seat "${name}" stays with its occupant; skin mounts without it`);
+    return () => {};
+  }
+
   /**
    * Build a skin's effects WITHOUT touching the mounted state. Every side
    * effect registers its rollback BEFORE mutating (R7): a mid-build crash
@@ -290,9 +332,9 @@ export function createSkinRuntime({ profile = "web" } = {}) {
         ctx.slots.inject("sidebar.brand.name", () =>
           ctx.slots.inject("conversation.hero.brand.mark", () => {
             const registrations = [
-              ctx.slots.register({ name: "sidebar.brand.mark", priority: -10 }, skin.Mark),
-              ctx.slots.register({ name: "sidebar.brand.name", priority: -10 }, skin.Name),
-              ctx.slots.register({ name: "conversation.hero.brand.mark", priority: -10 }, skin.Mark),
+              registerBrandSeat("sidebar.brand.mark", skin.Mark),
+              registerBrandSeat("sidebar.brand.name", skin.Name),
+              registerBrandSeat("conversation.hero.brand.mark", skin.Mark),
             ];
             return () => {
               for (let index = registrations.length - 1; index >= 0; index -= 1) {

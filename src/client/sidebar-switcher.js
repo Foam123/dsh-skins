@@ -322,7 +322,15 @@ export function installSidebarSwitcher(ctx, { runtime, jsx, react, reactDom, con
     ] });
   }
 
-  function SidebarAction({ wide, t }) {
+  // Footer gatekeeper: while a shell takeover is live (negative-priority
+  // occupant on sidebar.workspaces), the whole foot is that shell's native
+  // surface — render nothing at all here.
+  function SidebarAction(props) {
+    if (shellTakeover()) return null;
+    return jsx(SidebarActionBody, props);
+  }
+
+  function SidebarActionBody({ wide, t }) {
     const tr = typeof t === "function" ? (key, params) => t(key, params) : fallbackTranslate;
     const [open, setOpen] = react.useState(false);
     const [activeId, setActiveId] = react.useState(runtime.active);
@@ -578,9 +586,33 @@ export function installSidebarSwitcher(ctx, { runtime, jsx, react, reactDom, con
     try { return ctx.locale.register(NS, DICTS); } catch { return () => {}; }
   }, "dsh-skins: sidebar switcher dictionary");
 
+  // Shell-takeover sentinel (2026-10-13 ds-bot native foot): the sidebar foot
+  // belongs to whoever registers sidebar.workspaces (ui-sidebar doc: "the foot
+  // is the sidebar.workspaces registrant's"). The official workspace tree
+  // registers at default priority 0 (ui-workspace); a NEGATIVE-priority
+  // occupant is a takeover shell (ds-bot takes the seat at -10 for its native
+  // bot sidebar). Deliberately hook-free: SidebarRoot subscribes to
+  // sidebar.workspaces (it renders that slot), so any takeover flip re-renders
+  // the foot and this read re-evaluates — no state, no effect, no re-render
+  // plumbing. The coupling is the official slot contract (the declared slot
+  // and its ledger), not any ds-bot internal.
+  const shellTakeover = () => {
+    try {
+      return (ctx.slots.entries?.("sidebar.workspaces") ?? []).some((entry) => (entry.options.priority ?? 0) < 0);
+    } catch {
+      return false;
+    }
+  };
+
   ctx.slots.inject("sidebar.footer.action", () => ctx.slots.register({
     name: "sidebar.footer.action",
     id: "skins-switcher",
+    // Footer order stays at the positive utility seat (4): the bot view is
+    // handled by the shell-takeover sentinel below (we render nothing there),
+    // so order only sorts the PLAIN harness foot — where the DS Bot entry
+    // (-200) belongs ABOVE these utility rows (ruling 2026-10-13: a deep
+    // negative order was tried and reverted because it sank the DS Bot entry
+    // to the bottom of the harness foot).
     order: 4,
     locale: NS,
     label: () => {

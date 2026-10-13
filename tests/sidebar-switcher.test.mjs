@@ -67,7 +67,7 @@ function makeConfigClient() {
   };
 }
 
-function makeHarness(viewportHeight = 900, viewportWidth = 1400) {
+function makeHarness(viewportHeight = 900, viewportWidth = 1400, workspacesEntries = []) {
   const dom = makeDom(viewportHeight, viewportWidth);
   const configClient = makeConfigClient();
   const react = createFakeReact();
@@ -89,6 +89,7 @@ function makeHarness(viewportHeight = 900, viewportWidth = 1400) {
     slots: {
       inject: (key, callback) => callback() ?? (() => {}),
       register: (opts, comp) => { registered = { opts, comp }; return () => {}; },
+      entries: (key) => (key === "sidebar.workspaces" ? workspacesEntries : []),
     },
     locale: {
       register: () => () => {},
@@ -113,13 +114,14 @@ function makeHarness(viewportHeight = 900, viewportWidth = 1400) {
     skinsById: () => ({}),
   });
   const SidebarAction = registered.comp;
+  const seesShellTakeover = () => SidebarAction({ wide: true, t: null }) === null; // gatekeeper yields the whole row under a takeover shell
 
   let tree = null;
   const attachFocusRecorders = () => {
     // Attach recorders where the components call .focus() so focus
     // management is observable through the fake DOM. Runs after EVERY render:
     // rerenders recreate node objects and refs follow the newest node.
-    for (const node of [...flatten(tree), ...inShell()]) {
+    for (const node of [...(tree ? flatten(tree) : []), ...inShell()]) {
       if (node.props?.tabIndex === -1 && node.props?.role === "heading" && node.focus === undefined) {
         node.focus = (options) => dom.focused.push(options?.preventScroll ? "panel-heading-prevent-scroll" : "panel-heading");
       }
@@ -144,6 +146,7 @@ function makeHarness(viewportHeight = 900, viewportWidth = 1400) {
   // The reactDom stub renders portals as { $$portal, children } — descend
   // into the shell before flattening; the switcher trigger lives outside it.
   const shell = () => {
+    if (tree === null) return null; // shell-takeover gatekeeper yielded the whole row
     const portal = tree.props.children.find((child) => child?.$$portal);
     return portal?.children ?? null;
   };
@@ -168,7 +171,7 @@ function makeHarness(viewportHeight = 900, viewportWidth = 1400) {
     attachFocusRecorders();
   };
 
-  return { dom, configClient, tree: () => tree, render, shell, gearButton, cardButton, switcherButton, panelColumn, collapseButton, translucencyInput, heading, openShell, attachFocusRecorders, getActive: () => active,
+  return { dom, configClient, tree: () => tree, render, shell, gearButton, cardButton, switcherButton, panelColumn, collapseButton, translucencyInput, heading, openShell, attachFocusRecorders, getActive: () => active, seesShellTakeover,
     cssText: () => dom.created.map((el) => el.textContent ?? "").join("\n") };
 }
 
@@ -521,4 +524,17 @@ test("⑬ panel header collapses the panel back to the skin list (v1.0.0 ruling)
   const css = h.cssText();
   assert.ok(css.includes('.dsh-skins-pz-gear[aria-expanded="true"]{opacity:1;border-color:var(--dsw-alias-brand-primary)'),
     "the gear shows its expanded state in the brand language (ruling: toggle legibility)");
+});
+
+test("⑭ shell takeover sentinel: a negative-priority sidebar.workspaces occupant (ds-bot's native foot) yields the whole row; the official 0-priority tree does not", () => {
+  // ds-bot takes sidebar.workspaces at -10 for its native bot sidebar; the
+  // official workspace tree (ui-workspace) sits at default priority 0.
+  const hTaken = makeHarness(900, 1400, [{ options: { name: "sidebar.workspaces", priority: -10 } }]);
+  assert.equal(hTaken.seesShellTakeover(), true, "takeover shell live → the utility row yields entirely");
+
+  const hOfficial = makeHarness(900, 1400, [{ options: { name: "sidebar.workspaces", priority: 0 } }]);
+  assert.equal(hOfficial.seesShellTakeover(), false, "official tree at 0 → the row stays");
+
+  const hEmpty = makeHarness(900, 1400, []);
+  assert.equal(hEmpty.seesShellTakeover(), false, "empty ledger (stub contexts) → the row stays");
 });

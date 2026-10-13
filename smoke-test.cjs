@@ -237,11 +237,12 @@ if (registeredDictObjects["dsh-skins.ui"].zh["appearance.title"] !== "外观配�
 if (registeredDictObjects["dsh-skins.ui"].zh["appearance.system"] !== "跟随系统") throw new Error("zh dict missing appearance.system");
 if (registeredDictObjects["dsh-skins.ui"].zh["skins.official.label"] !== "DeepSeek Harness（官方）") throw new Error("zh dict missing official skin label");
 if (registeredDictObjects["dsh-skins.ui"].en["skins.official.label"] !== "DeepSeek Harness (Official)") throw new Error("en dict missing official skin label");
-const swTree = switcher.comp({ wide: true }); // t 传空 → 引擎内置词条兜底
+const renderThrough = (el) => (el && typeof el.type === "function" ? el.type(el.props) : el); // 穿过壳接管 gatekeeper（SidebarAction→Body）
+const swTree = renderThrough(switcher.comp({ wide: true })); // t 传空 → 引擎内置词条兜底
 const swBtn = swTree.props.children[0];
 if (swBtn.type !== "button" || swBtn.props["aria-label"] !== "主题切换") throw new Error("switcher button wrong");
 if (swBtn.props.children[1] === null || swBtn.props.children[1].props.children !== "主题切换") throw new Error("switcher label missing in wide mode");
-const railTree = switcher.comp({ wide: false });
+const railTree = renderThrough(switcher.comp({ wide: false }));
 if (!String(railTree.props.className).includes("rail")) throw new Error("collapsed sidebar should get rail class");
 if (railTree.props.children[0].props.children[1] !== null) throw new Error("rail mode should hide the label");
 console.log("✓ sidebar switcher registered (order " + switcher.opts.order + "); button 主题切换; rail mode hides label");
@@ -291,7 +292,7 @@ console.log("✓ skin descriptions and slot label localize with the active UI lo
 // Force the popover open. useState order: open, active skin, box,
 // personalize view, theme preference.
 stateOverrides = [true, "openbmc", { left: 20, bottom: 50 }, null, "dark"]; // active = factory default
-const openTree = switcher.comp({ wide: true });
+const openTree = renderThrough(switcher.comp({ wide: true })); // 穿过壳接管 gatekeeper
 const portal = openTree.props.children[1];
 if (!portal?.$$portal) throw new Error("open switcher should render a portal");
 const panel = portal.children;
