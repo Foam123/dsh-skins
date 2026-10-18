@@ -387,8 +387,8 @@ test("default-semver layer: cross-tuple rc lines do not satisfy the range", () =
 - [ ] Step 1: 装机（主人操作）
 - 说明：dsh-m 桌面通道对 agent 侧 upgrade 是结构化拒答——不绕行（020 红线）。请主人在产品 GUI 插件页把 dsh-skins 升到 1.5.8（或按 020 操作员通道）。若报 `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`（新发版 24h 等待期；desktop 的 exclude 现仅 pin 到 1.5.5）：按 020 §8/§9 处置——dsh-m ≥0.9.24 三挂点代管大概率自愈；等待期满自然解除，**不绕行**（R1-5）。
 - [ ] Step 2: 复核
-- Run: `$lib = "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\@iasiv5\dsh-skins\lib\index.js"; (Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\@iasiv5\dsh-skins\package.json" -Raw | ConvertFrom-Json).version; (Select-String -Path $lib -Pattern 'webStartup').Count`
-- Expected: version = `1.5.8`；`webStartup` 命中 ≥1（语义已随包，热修被正式版覆盖 = 按 024 先例自然退役，无需单独移除）。再跑 Task 3 Step 2 的探针应仍 `PASS`；GUI 面板读写正常。
+- Run: `$lib = "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\@iasiv5\dsh-skins\lib\index.js"; (Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\@iasiv5\dsh-skins\package.json" -Raw | ConvertFrom-Json).version; (Select-String -Path $lib -Pattern 'webStartup').Count; (Select-String -Path $lib -Pattern 'HOTFIX-DBG').Count`
+- Expected: version = `1.5.8`；`webStartup` 命中 ≥1（语义已随包，热修被正式版覆盖 = 按 024 先例自然退役，无需单独移除）；**`HOTFIX-DBG` 计数 = 0（诊断包装随正式版消失，R1-4 核证点）**。再跑 Task 3 Step 2 的探针应仍 `PASS`；GUI 面板读写正常。
 - [ ] Step 3: 留档
 - Change: Task 8 文档补一行退役记录（正式版装机时间、复核证据）；备份目录保留至下一次 DSH desktop 升级且无复发后清理（005 观察期规则）。
 
@@ -425,3 +425,5 @@ test("default-semver layer: cross-tuple rc lines do not satisfy the range", () =
 - 执行范围调整（主人指示）：执行至 Task 8 为止（热修 + 源码修复 + registry 本地编辑 + know-how 立档）；**Task 9（发版）与 Task 10（装机退役）暂缓**，待主人另行安排 subagent 评审后再继续。
 - 2026-10-18 执行偏差记录：know-how 编号 **033 已被并行工作占用**（`033-dsh-plugin-compat-audit-methodology.md`，索引使用规则 3 现写「下一篇 034」）——本案立档按顺延规则改编号为 **034**（`034-dsh-skins-desktop-webruntime-compat.md`）；原 Task 8 的 R1-9 子项（修正索引「下一篇 028」过时表述）已由该并行更新完成，子项免除。
 - 2026-10-18 执行发现（热修诊断，T3 期间）：本计划的惰性解析初版（属性访问 `hostContext.webStartup?.…`）在真实宿主上仍失败——**cordis 对未 inject 服务的属性访问直接抛 `cannot get property "webStartup" without inject`（throwing getter），`?.` 链不可防护**；异常被 `dsh-host-webserver` 分发兜底转为**裸 400 空体**（`.catch(err => { logger.warn; res.writeHead(400); res.end(); })`）。修复＝改用非抛的 `ctx.get(name)`（apply 外层 Context 上的核心方法，better-sidebar `owner.get` 同款）+ 逐服务独立 try/catch。热修三度迭代（v1 属性访问 400 → v1.5 诊断包装 500 抓栈 → v2 ctx.get 200）后 desktop rc.2 实测 200。源码线 T4 已同步采用 ctx.get 形态。
+- 2026-10-18 执行偏差记录（评审 R1-1 补记，impl-reviewer 基线对照定谳）：`pnpm run check` 在本机为红——**4 个既有失败**（`build-meirenzhi-wallpapers.test.mjs` 三例 + `personalization-store.test.mjs:453` 一例），基线 worktree `af50173` 同命令同败（**非本三提交引入**），dsh 运行时 node v24.21.0 复跑同败（非 node 版本差异）；根因线索＝meirenzhi 测试夹具 POSIX 专属（无扩展名 shebang shim + PATH `:` 分隔，`tests/build-meirenzhi-wallpapers.test.mjs` L39-49/L63），Windows 结构性必挂。**Task 6「check 全绿」验收在本机不可达，判据修正为**：基线对照后无新增失败（255 测试 251 绿）+ 新增 12 测试全绿 + smoke 过 + verify 三件套绿——Task 6 即按此判据交付（「除 4 个基线既有失败外全绿」），未声称字面全绿。Task 9 发版门禁按修正判据执行；既有失败的处置三选一（修夹具 Windows 兼容〔计划外，列建议〕/POSIX 环境跑门禁/主人显式豁免）→ 列「待主人决策」。
+- 2026-10-18 执行偏差记录（评审 R1-2/R1-3 补记）：registry description 实际文案较 Task 7 批准文本压缩（`…已适配 web 与 Desktop 0.2.0-rc.1+，详见仓库。`）——原拟文案触发 validate 当量软警告（79.5>60），细节按 validate 指引归 homepage/README 版本对照表（Task 9 落地）；压缩后复跑 validate exit 0、dsh-skins 零警告。另：评审轮 validate-registry 出现 GitHub API 限额（20 条 ✗ 全量失败、exit 1）属环境性——**Task 7 push 前须在限额恢复或设 GITHUB_TOKEN 后复跑 validate 取全绿记录**（R1-3）。
