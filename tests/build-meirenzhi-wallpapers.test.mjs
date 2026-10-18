@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import process from "node:process";
@@ -31,37 +31,44 @@ function makeWorkspace(t) {
   mkdirSync(srcDir, { recursive: true });
   for (const name of SOURCES) writeFileSync(join(srcDir, name), `jpeg-bytes-${name}`);
 
-  // ffmpeg/ffprobe shims: ffmpeg writes `fakeBytes` of filler to its last arg
-  // (the output path); ffprobe prints a fixed WIDTHxHEIGHT pair.
+  // ffmpeg/ffprobe shims as plain Node scripts, invoked through the script's
+  // FFMPEG_BIN/FFPROBE_BIN JSON seam (["node", shim]) — no shebang, exec bit
+  // or PATH rewriting needed, so the fixture is hermetic on every OS.
   const binDir = join(root, "bin");
   mkdirSync(binDir, { recursive: true });
-  const ffmpeg = join(binDir, "ffmpeg");
-  writeFileSync(ffmpeg, `#!/usr/bin/env node
-const fs = require("node:fs");
+  const ffmpegShim = join(binDir, "ffmpeg-shim.mjs");
+  writeFileSync(ffmpegShim, `import fs from "node:fs";
 const out = process.argv[process.argv.length - 1];
 fs.writeFileSync(out, Buffer.alloc(Number(process.env.FAKE_WEBP_BYTES), 7));
 `);
-  const ffprobe = join(binDir, "ffprobe");
-  writeFileSync(ffprobe, `#!/usr/bin/env node
-console.log("2560x1440");
+  const ffprobeShim = join(binDir, "ffprobe-shim.mjs");
+  writeFileSync(ffprobeShim, `console.log("2560x1440");
 `);
-  chmodSync(ffmpeg, 0o755);
-  chmodSync(ffprobe, 0o755);
 
-  // Controlled TMPDIR so the test can prove no mrz-wallpapers-* dir leaks.
+  // Controlled temp dir (TMPDIR plus the Windows TEMP/TMP aliases) so the
+  // test can prove no mrz-wallpapers-* dir leaks.
   const controlledTmp = join(root, "tmp");
   mkdirSync(controlledTmp, { recursive: true });
 
-  return { srcDir, binDir, controlledTmp, outPath: join(root, "wallpapers.js") };
+  return {
+    srcDir,
+    ffmpegBin: JSON.stringify([process.execPath, ffmpegShim]),
+    ffprobeBin: JSON.stringify([process.execPath, ffprobeShim]),
+    controlledTmp,
+    outPath: join(root, "wallpapers.js"),
+  };
 }
 
-function runBuilder({ srcDir, binDir, controlledTmp, outPath }, fakeBytes) {
+function runBuilder({ srcDir, ffmpegBin, ffprobeBin, controlledTmp, outPath }, fakeBytes) {
   return spawnSync(process.execPath, [SCRIPT, "--src", srcDir, "--out", outPath], {
     encoding: "utf8",
     env: {
       ...process.env,
-      PATH: `${binDir}:${process.env.PATH}`,
+      FFMPEG_BIN: ffmpegBin,
+      FFPROBE_BIN: ffprobeBin,
       TMPDIR: controlledTmp,
+      TEMP: controlledTmp,
+      TMP: controlledTmp,
       FAKE_WEBP_BYTES: String(fakeBytes),
     },
   });

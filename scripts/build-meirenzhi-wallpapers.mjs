@@ -42,10 +42,30 @@ const option = (name, fallback) => {
   return index === -1 ? fallback : args[index + 1];
 };
 
+// Tool override seam (hermetic tests / non-PATH environments): FFMPEG_BIN /
+// FFPROBE_BIN accept either a plain command name/path or a JSON array
+// `["prog", ...prefixArgs]` (e.g. ["node", "/path/shim.mjs"]) whose prefix is
+// prepended to every invocation. Defaults stay the PATH-resolved binaries.
+function toolFromEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((part) => typeof part === "string")) return parsed;
+  } catch {}
+  return raw;
+}
+function execTool(bin, args, opts) {
+  if (Array.isArray(bin)) return execFileSync(bin[0], [...bin.slice(1), ...args], opts);
+  return execFileSync(bin, args, opts);
+}
+
 const srcDir = resolve(option("--src", "/home/ubuntu/tmp/凡人修仙传"));
 const outPath = resolve(option("--out", "src/client/skins/meirenzhi/wallpapers.js"));
 const ENCODE_WIDTH = 2560;
 const ENCODE_QUALITY = 80;
+const FFMPEG = toolFromEnv("FFMPEG_BIN", "ffmpeg");
+const FFPROBE = toolFromEnv("FFPROBE_BIN", "ffprobe");
 const MAX_SINGLE_BYTES = 640_000;
 const MAX_TOTAL_BYTES = 2_300_000;
 
@@ -71,7 +91,7 @@ function fail(message) {
 
 function probeSize(webpPath) {
   // ffprobe ships with ffmpeg; csv=s=x prints "WIDTHxHEIGHT" for stream v:0.
-  const csv = execFileSync("ffprobe", [
+  const csv = execTool(FFPROBE, [
     "-v", "error",
     "-select_streams", "v:0",
     "-show_entries", "stream=width,height",
@@ -104,7 +124,7 @@ try {
   for (const [file, key] of SOURCES) {
     const src = join(srcDir, file); // 文件名含中文：路径原样传给 ffmpeg，不做任何归一化。
     const webp = join(workDir, `${key}.webp`);
-    execFileSync("ffmpeg", [
+    execTool(FFMPEG, [
       "-y", "-loglevel", "error",
       "-i", src,
       "-vf", `scale=${ENCODE_WIDTH}:-2`,

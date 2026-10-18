@@ -457,7 +457,7 @@ test("fault injection: a failed blob create leaves no library entry and no state
     openSync: (file, flags) => {
       // Fail only the first exclusive blob create, never the state writer
       // (which never opens files with "wx").
-      if (flags === "wx" && String(file).includes("/assets/")) {
+      if (flags === "wx" && String(file).replaceAll("\\", "/").includes("/assets/")) {
         blobCreates += 1;
         if (blobCreates === 1) throw new Error("simulated crash before commit");
       }
