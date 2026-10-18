@@ -168,7 +168,7 @@ export function mountPersonalizationRoutes(host, options) {
   const disposers = [];
 
   const fence = (request, response) => {
-    if (isTrustedRequest(request, trustedHosts)) return true;
+    if (isTrustedRequest(request, typeof trustedHosts === "function" ? trustedHosts() : trustedHosts)) return true;
     sendJson(response, 403, { error: "trusted DSH Web request required" });
     return false;
   };

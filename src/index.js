@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdtempSync, readdirSync, renameSync, rmSync } from
 import { dirname, join, resolve } from "node:path";
 import { createPersonalizationStore } from "./host/personalization/store.js";
 import { mountPersonalizationRoutes } from "./host/personalization-routes.js";
+import { resolveTrustedHosts } from "./host/trusted-hosts.js";
 
 export const name = "@iasiv5/dsh-skins";
 
@@ -52,7 +53,7 @@ export function dataDirForProfile(root, profile) {
 }
 
 export function apply(ctx) {
-  ctx.inject(["webServer", "webRuntime"], (hostContext) => {
+  ctx.inject(["webServer"], (hostContext) => {
     const root = dshHome();
     const profile = hostProfileFor(root);
     const personalization = createPersonalizationStore({
@@ -62,7 +63,7 @@ export function apply(ctx) {
     hostContext.effect(() => {
       return mountPersonalizationRoutes(hostContext, {
         store: personalization,
-        trustedHosts: hostContext.webRuntime.trustedHosts,
+        trustedHosts: () => resolveTrustedHosts(ctx),
       });
     }, "dsh-skins: personalization routes");
   });
