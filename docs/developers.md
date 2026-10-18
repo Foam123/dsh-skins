@@ -8,6 +8,7 @@
 - [工作原理](#工作原理)
 - [自建一套皮肤](#自建一套皮肤)
 - [本地开发与验证](#本地开发与验证)
+- [发版](#发版)
 - [控制台调试 API](#控制台调试-api)
 - [实现耦合的已知边界](#实现耦合的已知边界)
 
@@ -70,7 +71,7 @@ export function createMySkin({ jsx }) {
 ```sh
 pnpm install
 pnpm run test      # 构建 + 冒烟测试 + 全部单测（smoke 与 built-host 测的是 lib/ 产物，故每次先重建）
-pnpm run check     # 完整门禁：构建 + 语法检查 + 测试 + README 配对 + bundle 守卫
+pnpm run check     # 完整门禁：构建 + 语法检查 + 测试 + README 配对 + bundle/上游钩子守卫
 pnpm run watch     # 监听 src/，分别重建 lib/client.js 与 lib/index.js
 ```
 
@@ -78,12 +79,21 @@ pnpm run watch     # 监听 src/，分别重建 lib/client.js 与 lib/index.js
 - 提交前同时提交源码与重新生成的 `lib/` 两个产物。CI 会复查构建、产物无差异与安装包内容。
 - 截图脚本内置隐私规程：折叠全部工作区、新建空会话取景、界面强制中文，不泄露任何会话内容。`--gate` 的验收截图默认写到按当前 `package.json.version` 隔离的 `.artifacts/release-gates/v<version>/`（gitignored），只作本地证据，不随 tag 入库；普通捕获仍默认写 `docs/assets`。仅当 README、视觉样式或文档截图引用确实变化时，才显式执行 `node scripts/capture-previews.mjs --skin <id> --out docs/assets` 更新文档图片。发版前运行 `git diff --exit-code -- docs/assets`，无意更新文档截图的版本必须保持该目录零差异。
 - 两份 README（中/英）由校验脚本做内容配对；改动任一侧须同步另一侧，详见 `README.i18n.yaml`。
+- `verify:hooks`（上游钩子守卫）需要 runtime 才能真跑：设 `DSH_RUNTIME_ROOT` 指向 DSH 运行时根——pnpm store 布局或桌面 asar 解包后的 `dsh/` 目录均受支持（后者走结构化匹配，css-modules 精确哈希支路按 ADR-0006 不作要求）。未设置时守卫打印 skipping 后跳过、`check` 照样绿——发布轮务必设好真跑一次；解包不完整（缺 `dsh-client-ui-slots` 等锚点包）会失败，换完整解包再跑。
 
 开发模式安装（本地源码直连，客户端改动即改即见）：
 
 ```sh
 dsh plugin --profile web add link:<本仓库路径>
 ```
+
+## 发版
+
+1. `package.json` bump 版本；双语 README 如有改动，跑 `node scripts/verify-readme-pairing.mjs --write` 重登记配对哈希；
+2. 全门禁 `pnpm run check`——发布轮次须设 `DSH_RUNTIME_ROOT` 真跑 `verify:hooks`（见上一节）；
+3. 提交源码与重新生成的 `lib/` 产物，打 `vX.Y.Z` tag 并推送；Release workflow 经 npm OIDC Trusted Publishing 发布；
+4. **workflow 全绿 ≠ 已上架**：npm 对 provenance 发布有 staged 暂存窗口（scoped 包实测可达约 1 小时），期间 per-version 文档 404、`dist-tags` 停在旧版。用 `npm view <pkg>@<version> --registry=https://registry.npmjs.org/` 每 2 分钟轮询到 200 为止；窗口内重推同一 tag 必撞 `409 Cannot publish over previously staged version`，且 workflow 失败护栏会删除远端 tag；
+5. 三键核验齐全再宣布发版成功：per-version 文档 200、`dist-tags.latest` 推进、packument `time` 字段推进。
 
 ## 控制台调试 API
 
