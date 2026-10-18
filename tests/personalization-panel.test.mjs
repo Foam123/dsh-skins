@@ -159,8 +159,8 @@ for (const skinId of SKINS) {
   }
 }
 
-test("meirenzhi slider renders Desktop factory 55 and Web factory 35, including after reset", async () => {
-  for (const [desktop, expected] of [[true, "55%"], [false, "35%"]]) {
+test("meirenzhi slider renders Desktop factory 66 and Web factory 35, including after reset", async () => {
+  for (const [desktop, expected] of [[true, "66%"], [false, "35%"]]) {
     const config = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 70 } } });
     const panel = mountPanel({ skinId: "meirenzhi", config, desktop });
     await tick();

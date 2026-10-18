@@ -132,8 +132,8 @@ test("clicking the factory-default value on a pristine skin is a no-op (v1.0.0 r
   client.dispose();
 });
 
-test("Desktop P=55 is a no-op default, P=35 is a real override; Web retains the inverse", async () => {
-  for (const [profile, factory, custom] of [["desktop", 55, 35], ["web", 35, 55]]) {
+test("Desktop P=66 is a no-op default, P=35 is a real override; Web retains the inverse", async () => {
+  for (const [profile, factory, custom] of [["desktop", 66, 35], ["web", 35, 55]]) {
     const fetchImpl = makeFetch(() => snapshotBody());
     const client = createConfigClient({ fetchImpl, profile, timeoutMs: 50 });
     await client.boot();

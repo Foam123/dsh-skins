@@ -175,10 +175,12 @@ export const SKINS = {
 export function getSkinSchema(skinId, profile = "web") {
   const entry = SKINS[skinId];
   if (entry === undefined) return null;
-  // Profile-specific factory point: Web keeps the original P=35 while the
-  // Desktop app starts (and resets) 美人志 at P=55. No default is persisted.
-  const fields = profile === "desktop" && skinId === "meirenzhi"
-    ? entry.fields.map((field) => field.key === "panelOpacity" ? { ...field, default: 55 } : field)
+  // Profile-specific factory point: Web keeps the catalog defaults (openbmc /
+  // uefi-harness P=55 baked-anchor, meirenzhi P=35 curve anchor) while the
+  // Desktop app starts (and resets) every skin at P=66. No default is
+  // persisted.
+  const fields = profile === "desktop"
+    ? entry.fields.map((field) => field.key === "panelOpacity" ? { ...field, default: 66 } : field)
     : entry.fields;
   return { skinId, fields, builtinAssets: entry.builtinAssets };
 }

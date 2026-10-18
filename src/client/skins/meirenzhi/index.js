@@ -136,9 +136,11 @@ const builtinAssets = {
 };
 
 /**
- * 投影数学（tgcf 二次曲线，锚点 P=35 = catalog 出厂默认）：一个通透度旋钮
- * 联动面板底色（α 线性）、壁纸纱（30·t²）与模糊（12·t²）；P=0 纯壁纸完全
- * 可见，P=100 随动族钳 1.00。侧栏增量沿用 ruling #15 惯例（亮 +0.05 /
+ * 投影数学（tgcf 同构二次曲线；模糊铰链锚 P=35 = catalog web 出厂默认，
+ * ADR-0010）：一个通透度旋钮联动面板底色（α 线性）、壁纸纱（30·t²）与
+ * 模糊（P≤35 恒 0，之上 12·((t−0.35)/0.65)²——与 legacy 皮肤的 (P−55)/45
+ * 铰链同构，每套皮肤在自己的出厂点零模糊）；P=0 纯壁纸完全可见，P=100
+ * 随动族钳 1.00、模糊到顶 12px。侧栏增量沿用 ruling #15 惯例（亮 +0.05 /
  * 暗 +0.17）；composer/selector 沿 tgcf 结构（亮 +0.05/暗 +0.10、亮 +0/暗 +0.05）。
  */
 function project(values, assets) {
@@ -179,7 +181,7 @@ function project(values, assets) {
   const s = (Math.round(30 * t * t) / 100).toFixed(3);
   const scrimLight = `linear-gradient(rgba(252, 250, 246, ${s}) 0%, rgba(252, 250, 246, ${s}) 100%)`;
   const scrimDark = `linear-gradient(rgba(16, 16, 26, ${s}) 0%, rgba(16, 16, 26, ${s}) 100%)`;
-  const blurPx = Math.round(12 * t * t);
+  const blurPx = t > 0.35 ? Math.round(12 * ((t - 0.35) / 0.65) ** 2) : 0;
   const desktopBlurPx = Math.min(24, blurPx + values.panelOpacity / 55);
 
   // builtin/user 引用已由 projector/assetResolver 解析成 URL，这里统一消费。

@@ -55,15 +55,15 @@ test("brand contract: bundled mark, gradient name and badge inversion are pinned
   assert.ok(css.includes('body[data-dsh-meirenzhi-skin][data-ds-dark-theme] :is([class*="Sixlwa_bubble"], [class*="userStack"] > [class*="_bubble"]){border-color:rgba(229, 138, 128, 0.38);box-shadow:0 1px 6px rgba(229, 138, 128, 0.10)}'));
 });
 
-test("project at factory P=35: riding alphas, constants, scrim and blur", () => {
+test("project at factory P=35: riding alphas, constants, scrim and factory-crisp blur", () => {
   const fx = project({ panelOpacity: 35 });
   assert.equal(fx.bodyAttribute, "dshMeirenzhiSkin");
   assert.equal(fx.titleBrand, "美人志");
   assert.deepEqual(fx.slogans, { zh: "测", en: "t" });
   assert.equal(fx.backdrop.imageLight, `url("${WALLPAPER_URL}")`);
   assert.equal(fx.backdrop.imageDark, `url("${WALLPAPER_URL}")`);
-  assert.equal(fx.backdrop.blur, 1);
-  assert.deepEqual(fx.backdrop.desktopBlur, { light: 1 + 35 / 55, dark: 1 + 35 / 55 });
+  assert.equal(fx.backdrop.blur, 0, "ADR-0010: factory P=35 sits on the hinge floor — zero wallpaper blur");
+  assert.deepEqual(fx.backdrop.desktopBlur, { light: 35 / 55, dark: 35 / 55 });
   assert.ok(fx.backdrop.overlayLight.includes("rgba(252, 250, 246, 0.040)"));
   assert.ok(fx.backdrop.overlayDark.includes("rgba(16, 16, 26, 0.040)"));
   const t = fx.tokenOverrides;
@@ -82,8 +82,10 @@ test("project at factory P=35: riding alphas, constants, scrim and blur", () => 
   assert.equal(t["--dsw-specific-bubble"].dark, "rgba(24, 24, 34, 0.90)");
   assert.equal(t["--dsw-specific-bubble-highlight"].light, "rgba(184, 67, 63, 0.18)");
   assert.equal(t["--dsw-specific-bubble-highlight"].dark, "rgba(40, 40, 56, 0.92)");
-  assert.deepEqual(fx.cssVariables, { "--dsh-mrz-glass-blur": { light: "1px", dark: "1px" } });
+  assert.deepEqual(fx.cssVariables, null, "glass variable ships only above the hinge (blurPx > 0)");
   assert.ok(fx.staticCss.includes("dsh-mrz-badge"));
+  assert.equal(fx.staticCss.includes("--dsh-mrz-glass-blur"), false,
+    "ADR-0010: no glass rule at the factory P=35 — wallpaper stays native-crisp (frost-family rules still ship)");
   assert.equal(fx.decorations, null);
 });
 
@@ -95,8 +97,8 @@ test("project at P=0: pure wallpaper, no blur layer; at P=100 alphas clamp to 1.
   assert.equal(zero.tokenOverrides["--dsw-alias-bg-base"].light, "rgba(250, 249, 246, 0.00)");
   assert.ok(zero.backdrop.overlayLight.includes("rgba(252, 250, 246, 0.000)"));
   const middle = project({ panelOpacity: 55 });
-  assert.equal(middle.backdrop.blur, 4);
-  assert.deepEqual(middle.backdrop.desktopBlur, { light: 5, dark: 5 });
+  assert.equal(middle.backdrop.blur, 1, "hinge curve: 12·((0.55−0.35)/0.65)² ≈ 1.14 → 1px");
+  assert.deepEqual(middle.backdrop.desktopBlur, { light: 1 + 55 / 55, dark: 1 + 55 / 55 });
   const full = project({ panelOpacity: 100 });
   assert.equal(full.tokenOverrides["--dsw-specific-sidebar-fill"].dark, "rgba(18, 18, 26, 1.00)");
   assert.equal(full.backdrop.blur, 12);

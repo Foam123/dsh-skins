@@ -96,8 +96,8 @@ test("load-time normalization drops overrides equal to the factory default (v1.0
   assert.equal(store.snapshot().mode, "normal", "normal path, not recovery");
 });
 
-test("Desktop load normalization removes factory 55 but retains explicitly chosen 35; Web does the reverse", () => {
-  for (const [profile, factory, custom] of [["desktop", 55, 35], ["web", 35, 55]]) {
+test("Desktop load normalization removes factory 66 but retains explicitly chosen 35; Web does the reverse", () => {
+  for (const [profile, factory, custom] of [["desktop", 66, 35], ["web", 35, 55]]) {
     const dir = tempDir();
     writeFileSync(join(dir, "state.json"), JSON.stringify({
       configVersion: 1, revision: 4,

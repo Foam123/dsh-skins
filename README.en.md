@@ -46,7 +46,7 @@ With the [dsh-m](https://github.com/iasiv5/dsh-m) plugin marketplace installed, 
 
 | Your DSH version | Plugin version |
 |---|---|
-| `0.2.0-rc.1` and later (Web and Desktop alike) | `@latest` (1.5.8+) |
+| `0.2.0-rc.1` and later (Web and Desktop alike) | `@latest` (1.5.9+) |
 | `0.1.x` | `1.5.7` (last release supporting that line) |
 
 <details>
@@ -114,7 +114,9 @@ Every skin's key visuals are open to adjustment. Click the gear button on a skin
 |---|---|---|
 | **Wallpaper** | Pick from the skin's built-in artwork, or upload your own images into a personal library | Each skin's default artwork |
 | **Slogan** | The new-session guidance line, one Chinese and one English copy | The skin's factory slogan |
-| **Translucency** | 0–100%, one value driving three visual layers: panel tint, wallpaper scrim and blur. 0% is pure, fully visible wallpaper; 100% hides it completely | meirenzhi: Web 35%, Desktop 55%; openbmc / uefi-harness: 55% in both |
+| **Translucency** | 0–100%, one value driving three visual layers: panel tint, wallpaper scrim and blur. 0% is pure, fully visible wallpaper; 100% hides it completely | meirenzhi: Web 35%, Desktop 66%; openbmc / uefi-harness: Web 55%, Desktop 66% |
+
+> meirenzhi ships zero wallpaper blur and no global glass at or below its Web factory value (35%) (ADR-0010) — the wallpaper stays native-crisp; blur ramps smoothly above 35% up to 12px at 100%.
 
 > **Desktop profile**: the shell is the solid skin base color and the wallpaper shows only inside the conversation area — see "The Desktop profile" below.
 

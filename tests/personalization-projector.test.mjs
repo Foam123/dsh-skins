@@ -368,14 +368,14 @@ test("Desktop blur candidates follow P without changing the Web backdrop blur", 
   expectBlur(uefi, { panelOpacity: 77 }, 6, { light: 7.4, dark: 7.4 }, "UEFI P77");
   expectBlur(uefi, { panelOpacity: 100 }, 24, { light: 24, dark: 24 }, "UEFI P100 caps at 24px");
 
-  expectBlur(meirenzhi, {}, 1, { light: 1 + 35 / 55, dark: 1 + 35 / 55 }, "MeirenZhi factory P35");
+  expectBlur(meirenzhi, {}, 0, { light: 35 / 55, dark: 35 / 55 }, "MeirenZhi factory P35 — hinge floor, zero blur (ADR-0010)");
   expectBlur(meirenzhi, { panelOpacity: 0 }, 0, { light: 0, dark: 0 }, "MeirenZhi P0");
-  expectBlur(meirenzhi, { panelOpacity: 55 }, 4, { light: 5, dark: 5 }, "MeirenZhi P55");
-  expectBlur(meirenzhi, { panelOpacity: 77 }, 7, { light: 8.4, dark: 8.4 }, "MeirenZhi P77");
+  expectBlur(meirenzhi, { panelOpacity: 55 }, 1, { light: 2, dark: 2 }, "MeirenZhi P55");
+  expectBlur(meirenzhi, { panelOpacity: 77 }, 5, { light: 6.4, dark: 6.4 }, "MeirenZhi P77");
   expectBlur(meirenzhi, { panelOpacity: 100 }, 12, { light: 12 + 100 / 55, dark: 12 + 100 / 55 }, "MeirenZhi P100");
 });
 
-test("meirenzhi Desktop projects factory P55 while Web factory remains P35", async () => {
+test("meirenzhi Desktop projects factory P66 while Web factory remains P35", async () => {
   const { createMeirenzhiSkin } = await import("../src/client/skins/meirenzhi/index.js");
   const skin = createMeirenzhiSkin({ jsx: () => null });
   const assetResolver = (ref) => ({ url: `builtin://${ref.skinId}/${ref.assetKey}`, mime: "image/webp" });
@@ -384,11 +384,11 @@ test("meirenzhi Desktop projects factory P55 while Web factory remains P35", asy
   assert.equal(desktop.degraded, "none");
   assert.equal(web.degraded, "none");
   assert.deepEqual(desktop.effects.tokenOverrides["--dsw-alias-bg-base"],
-    { light: "rgba(250, 249, 246, 0.55)", dark: "rgba(18, 18, 26, 0.55)" });
+    { light: "rgba(250, 249, 246, 0.66)", dark: "rgba(18, 18, 26, 0.66)" });
   assert.deepEqual(web.effects.tokenOverrides["--dsw-alias-bg-base"],
     { light: "rgba(250, 249, 246, 0.35)", dark: "rgba(18, 18, 26, 0.35)" });
-  assert.equal(desktop.effects.backdrop.blur, 4);
-  assert.equal(web.effects.backdrop.blur, 1);
+  assert.equal(desktop.effects.backdrop.blur, 3);
+  assert.equal(web.effects.backdrop.blur, 0, "web factory P35 sits on the hinge floor (ADR-0010)");
 });
 
 test("the REAL meirenzhi factory projects single scrim, static palette and static favicon", async () => {
@@ -398,12 +398,12 @@ test("the REAL meirenzhi factory projects single scrim, static palette and stati
   const resolverFor = (ref) => ({ url: `builtin://${ref.skinId}/${ref.assetKey}`, mime: "image/webp" });
   const result = projectSkin(skin, {}, { assetResolver: resolverFor });
   assert.equal(result.degraded, "none");
-  // Translucency curve at the factory default P=35 → scrim 4, blur 1
-  // (tgcf 二次曲线沿用：30·t² / 12·t²)；one alpha drives BOTH overlays.
+  // Translucency curve at the factory default P=35 → scrim 4, blur 0
+  // (ADR-0010 hinge: 30·t² scrim, blur zero at/below the P=35 anchor).
   assert.equal(result.effects.backdrop.overlayLight, "linear-gradient(rgba(252, 250, 246, 0.040) 0%, rgba(252, 250, 246, 0.040) 100%)");
   assert.equal(result.effects.backdrop.overlayDark, "linear-gradient(rgba(16, 16, 26, 0.040) 0%, rgba(16, 16, 26, 0.040) 100%)");
-  assert.equal(result.effects.backdrop.blur, 1);
-  assert.deepEqual(result.effects.cssVariables["--dsh-mrz-glass-blur"], { light: "1px", dark: "1px" });
+  assert.equal(result.effects.backdrop.blur, 0);
+  assert.equal(result.effects.cssVariables, null, "no glass variable on the hinge floor");
   // Sidebar fill sits ABOVE the content base by the reference-skin deltas
   // (ruling #15: light +0.05, dark +0.17 — openbmc/uefi pattern).
   assert.deepEqual(result.effects.tokenOverrides["--dsw-alias-bg-base"], { light: "rgba(250, 249, 246, 0.35)", dark: "rgba(18, 18, 26, 0.35)" });
@@ -427,8 +427,9 @@ test("the REAL meirenzhi factory projects single scrim, static palette and stati
   assert.deepEqual(result.effects.tokenOverrides["--dsw-alias-interactive-bg-hover"], { light: "rgba(184, 67, 63, 0.08)", dark: "rgba(229, 138, 128, 0.14)" });
   assert.deepEqual(result.effects.tokenOverrides["--dsw-alias-bg-overlay"], { light: "rgba(252, 250, 246, 0.85)", dark: "rgba(24, 24, 34, 0.88)" });
   assert.deepEqual(result.effects.tokenOverrides["--dsw-specific-sidebar-nav-item-active"], { light: "rgba(250, 249, 246, 0.9)", dark: "rgba(28, 28, 40, 0.9)" });
-  // Glass rule rides staticCss at P>0; decorations stay null.
-  assert.equal(result.effects.staticCss, skin.css + "\n" + 'body[data-dsh-meirenzhi-skin] [id="root"]{backdrop-filter:blur(var(--dsh-mrz-glass-blur,0px))}');
+  // Glass rule stays P-gated: absent on the ADR-0010 hinge floor (P≤35);
+  // decorations stay null.
+  assert.equal(result.effects.staticCss, skin.css);
   assert.equal(result.effects.decorations, null);
   assert.deepEqual(result.effects.slogans, { zh: "风起凡尘 · 红颜问道", en: "From mortal dust, immortals bloom" });
   assert.equal(result.effects.titleBrand, "美人志");

@@ -21,7 +21,7 @@ test("Desktop migrates a private copy; Web state is unchanged by opposite defaul
   const webDir = dataDirForProfile(root, "web");
   mkdirSync(join(webDir, "assets"), { recursive: true });
   const original = JSON.stringify({ configVersion: 1, revision: 7,
-    skins: { meirenzhi: { panelOpacity: 55 } }, library: {} });
+    skins: { meirenzhi: { panelOpacity: 66 } }, library: {} });
   writeFileSync(join(webDir, "state.json"), original);
   writeFileSync(join(webDir, "assets", "keep.bin"), "image bytes");
   const desktopDir = dataDirForProfile(root, "desktop");
@@ -32,11 +32,11 @@ test("Desktop migrates a private copy; Web state is unchanged by opposite defaul
   assert.deepEqual(readdirSync(root).filter((name) => name.startsWith(".dsh-skins-desktop-migrate-")), [],
     "no incomplete staging directory remains");
   const desktop = createPersonalizationStore({ dataDir: desktopDir, profile: "desktop" });
-  assert.deepEqual(desktop.snapshot().skins, {}, "Desktop considers 55 the default and cleans only its own copy");
+  assert.deepEqual(desktop.snapshot().skins, {}, "Desktop considers 66 the default and cleans only its own copy");
   assert.equal(readFileSync(join(webDir, "state.json"), "utf8"), original,
     "Desktop normalization must not overwrite Web data");
   const web = createPersonalizationStore({ dataDir: webDir, profile: "web" });
-  assert.deepEqual(web.snapshot().skins.meirenzhi, { panelOpacity: 55 },
-    "Web retains its deliberate 55 override");
+  assert.deepEqual(web.snapshot().skins.meirenzhi, { panelOpacity: 66 },
+    "Web retains its deliberate 66 override");
   assert.equal(existsSync(join(desktopDir, "state.json")), true);
 });
