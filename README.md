@@ -42,6 +42,13 @@ dsh plugin --profile web remove @iasiv5/dsh-skins    # 卸载
 
 安装了 [dsh-m](https://github.com/iasiv5/dsh-m) 插件市场的话，也可以直接在 DSH Web 界面里一键安装 / 卸载本插件。
 
+**按 DSH 版本选插件版本**：
+
+| 你的 DSH 版本 | 插件版本 |
+|---|---|
+| `0.2.0-rc.1` 及以上（web 与 Desktop 通用） | `@latest`（1.5.8+） |
+| `0.1.x` | `1.5.7`（该线的最后支持版） |
+
 <details>
 <summary>把安装交给 Agent（提示词安装法）</summary>
 
@@ -140,7 +147,7 @@ dsh plugin --profile web remove @iasiv5/dsh-skins    # 卸载
 
 ![Desktop profile — 实色外壳 + 会话区壁纸（美人志 · 深色）](docs/assets/preview-desktop-1.webp)
 
-- 已在 dsh Desktop `0.2.0-rc.2`（Windows）验证；macOS / Linux Desktop 当前跟随 Web 形态，后续版本适配。
+- 已在 dsh Desktop `0.2.1-rc.2`（Windows）验证；macOS / Linux Desktop 当前跟随 Web 形态，后续版本适配。
 - 右栏面板全屏时为实色皮肤底、不透出壁纸；面板「收起/关闭」后的空轨道行为属宿主布局。
 
 ## 皮肤切换器
@@ -173,10 +180,10 @@ URL 也能切皮肤：`/?skin=official`、`/?skin=openbmc`、`/?skin=uefi-harnes
 更新职责已移交 dsh-m 市场与 DSH CLI（ADR-0008）；皮肤切换器只负责换肤与个性化。
 
 **支持哪些 DSH Web 版本？**
-已使用 DSH Web `0.2.0-rc.2` 验证。同系列 rc 版本理论上兼容，未经验证的版本不作承诺。
+已使用 DSH Web `0.2.0-rc.2` 验证。同系列 rc 版本理论上兼容，未经验证的版本不作承诺。最低支持 DSH `0.2.0-rc.1`：更旧的 DSH 版本会被 peer 依赖门槛挡住，无法升级到 1.5.8+。
 
 **支持 Desktop profile 吗？**
-支持。DSH Desktop 应用与 Web profile 各自独立安装、互不影响；桌面形态（实色外壳 + 会话区壁纸）见「Desktop profile 上的形态」。已使用 dsh Desktop `0.2.0-rc.2`（Windows）验证。
+支持。DSH Desktop 应用与 Web profile 各自独立安装、互不影响；桌面形态（实色外壳 + 会话区壁纸）见「Desktop profile 上的形态」。已使用 dsh Desktop `0.2.1-rc.2`（Windows）验证。
 
 **外观偏好在不同的浏览器间同步吗？**
 在 DSH 所在机器的浏览器（loopback）上，偏好由 DSH Host 持久化，天然共享。其他远程浏览器由插件将偏好存入本地 `localStorage`，各浏览器独立、互不覆盖。

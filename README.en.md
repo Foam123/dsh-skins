@@ -42,6 +42,13 @@ dsh plugin --profile web remove @iasiv5/dsh-skins    # uninstall
 
 With the [dsh-m](https://github.com/iasiv5/dsh-m) plugin marketplace installed, you can also install / uninstall this plugin with one click inside the DSH Web UI.
 
+**Pick the plugin version for your DSH version**:
+
+| Your DSH version | Plugin version |
+|---|---|
+| `0.2.0-rc.1` and later (Web and Desktop alike) | `@latest` (1.5.8+) |
+| `0.1.x` | `1.5.7` (last release supporting that line) |
+
 <details>
 <summary>Hand the install to your Agent (prompt install)</summary>
 
@@ -140,7 +147,7 @@ In the **DSH Desktop app**, the shell chrome — sidebar, caption strip, right p
 
 ![Desktop profile — solid chrome + wallpaper in the conversation area (meirenzhi · dark)](docs/assets/preview-desktop-1.webp)
 
-- Verified with dsh Desktop `0.2.0-rc.2` (Windows); macOS / Linux Desktop currently follow the Web form and will be adapted in a later release.
+- Verified with dsh Desktop `0.2.1-rc.2` (Windows); macOS / Linux Desktop currently follow the Web form and will be adapted in a later release.
 - The right panel in fullscreen is the solid skin base color; the wallpaper is not shown through it.
 
 ## The skin switcher
@@ -173,10 +180,10 @@ Pick "DeepSeek Harness (Official)" in the skin switcher, or open `/?skin=officia
 Update duty has moved to the dsh-m marketplace and the DSH CLI (ADR-0008); the skin switcher only handles skins and personalization.
 
 **Which DSH Web versions are supported?**
-Verified with DSH Web `0.2.0-rc.2`. Later rc builds of the same series are expected to work, but unverified versions carry no promise.
+Verified with DSH Web `0.2.0-rc.2`. Later rc builds of the same series are expected to work, but unverified versions carry no promise. Requires DSH `0.2.0-rc.1` or later; older DSH versions are blocked from upgrading to 1.5.8+ by the peer dependency floor.
 
 **Is the Desktop profile supported?**
-Yes. The DSH Desktop app and the Web profile are installed independently and do not affect each other; the desktop form (solid chrome + wallpaper in the conversation area) is described under "The Desktop profile". Verified with dsh Desktop `0.2.0-rc.2` (Windows).
+Yes. The DSH Desktop app and the Web profile are installed independently and do not affect each other; the desktop form (solid chrome + wallpaper in the conversation area) is described under "The Desktop profile". Verified with dsh Desktop `0.2.1-rc.2` (Windows).
 
 **Does my appearance preference sync across browsers?**
 In the browser on the DSH host machine (loopback), the preference is persisted by the DSH Host and shared naturally. Other remote browsers keep the preference in their own `localStorage` — independent per browser, never overwritten.
