@@ -122,8 +122,13 @@ if (mode === "--capture") {
   const base = JSON.parse(readFileSync(new URL(`./baseline-${skin}.json`, import.meta.url)));
   const cur = snapshot(cssOf[skin]());
   const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  // squash 比较前对两侧做同一种全去空白规范化：selector 逗号后有无空格、
-  // 声明内空格均属排版差异（基线以旧式 capture 存储，此处统一迁移，幂等）。
+  // squash 比较前对两侧做同一种全去空白规范化。动机：本文件 Task 1 原版
+  // pairs() 对 selector 只折叠空白、未全剥除——meirenzhi 原手抄 selector 逗号
+  // 后无空格、生成器输出为 ",\n"（折叠后 ", "），纯排版差会被误判为内容差
+  //（实测 28 行差异全部仅此区别，复现工具 verify-planvariant.mjs）。计划全局
+  // 约束定义的 squash canon 是「去注释 + 去空白」，sq 使实现与该定义一致；
+  // 基线本身无瑕（评审已用 git archive 重算逐字节核证）。对称幂等：
+  // openbmc/uefi 仍由 literal 通道逐字钉住，sq 不放松其严格门。
   const sq = (pairs) => pairs.map((p) => p.replace(/\s+/g, ""));
   const squashPass = eq(sq(base.squash), sq(cur.squash));
   const menuPass = eq(base.menuCounts, cur.menuCounts) && Object.values(cur.menuCounts).every((n) => n === 2);
