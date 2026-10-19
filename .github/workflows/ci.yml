@@ -21,6 +21,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Provision pinned DSH runtime (upstream-hooks guard, ADR-0011)
+        run: node scripts/ci-install-runtime.mjs
       - name: Release preflight (version + repository identity)
         run: node scripts/verify-release.mjs
       - run: pnpm run check

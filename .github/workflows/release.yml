@@ -28,6 +28,8 @@ jobs:
       - name: Verify tag ↔ package version identity
         run: node scripts/verify-release.mjs "${GITHUB_REF_NAME}"
       - run: pnpm install --frozen-lockfile
+      - name: Provision pinned DSH runtime (upstream-hooks guard, ADR-0011)
+        run: node scripts/ci-install-runtime.mjs
       - run: pnpm run check
       - name: Verify generated Host and client bundles are committed
         run: git diff --exit-code -- lib/index.js lib/client.js

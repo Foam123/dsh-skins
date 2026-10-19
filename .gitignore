@@ -1,6 +1,7 @@
 node_modules/
 .pnpm-store/
 .artifacts/
+.dsh-ci-runtime/
 pkgcheck/
 *.log
 .DS_Store

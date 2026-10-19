@@ -49,9 +49,17 @@
  * Two layouts are understood: the pnpm store (`node_modules/.pnpm/
  * @deepseek-ai+dsh-*@…`) and the direct desktop-asar form
  * (`node_modules/@deepseek-ai/dsh-*` — point $DSH_RUNTIME_ROOT at an
- * extracted asar's dsh/ directory). Neither layout installed → yellow skip,
- * exit 0 (CI has no runtime; absence is not a code defect). Runtime present
- * but drifted → exit 1.
+ * extracted asar's dsh/ directory).
+ *
+ * Verdicts are machine-distinguishable (ADR-0011) — callers grep stable
+ * tokens instead of trusting exit codes that conflate "verified" with
+ * "nothing was checked":
+ *   upstream-hooks: VERIFIED <mode> — …   runtime present, manifest alive
+ *   upstream-hooks: SKIPPED <reason)      no runtime under the root; exit 0
+ *                                          (absence is not a code defect;
+ *                                          CI provisions a pinned runtime
+ *                                          instead — ADR-0011)
+ *   upstream-hooks: FAILED (<n> problems) runtime present but drifted; exit 1
  *
  * Judging modes: the pnpm store is the WEB runtime the ADR-0006 exact hashes
  * were derived from → strict mode (hashes are hard requirements). The direct
@@ -75,7 +83,7 @@ const pnpmDir = join(runtimeRoot, "node_modules/.pnpm");
 const directDir = join(runtimeRoot, "node_modules/@deepseek-ai");
 
 if (!existsSync(pnpmDir) && !existsSync(directDir)) {
-	console.error(`${YELLOW}upstream-hooks: no DSH runtime at ${runtimeRoot} — skipping (set DSH_RUNTIME_ROOT to override)${RESET}`);
+	console.error(`${YELLOW}upstream-hooks: SKIPPED (no DSH runtime at ${runtimeRoot}; set DSH_RUNTIME_ROOT to override)${RESET}`);
 	process.exit(0);
 }
 
@@ -221,10 +229,13 @@ if (theme === "") {
 // 5. service API anchors (2026-09-28 audit): methods skins calls on injected
 // services. Scoped per package so generic names ("register") stay meaningful;
 // a missing anchor means that injected-service call site will throw at runtime.
+// slots.inject / slots.register is NOT anchored here: since 0.2.1-rc.2 the
+// ui-slots module no longer ships as a standalone store package — it is
+// compiled into the dsh-web-frontend bundle. Its existence is anchored in
+// section 6 against the frontend dist module map instead (ADR-0011 附录 P1).
 const SERVICE_API_ANCHORS = [
 	["dsh-client-ui-theme", ["overrideTokens"], "theme.overrideTokens"],
 	["dsh-client-locale", ["register", "translate"], "locale.register / locale.translate"],
-	["dsh-client-ui-slots", ["inject", "register"], "slots.inject / slots.register"],
 	["dsh-client-connection", ["isLoopback"], "connection.isLoopback"],
 	["dsh-host-webserver", ["register"], "webServer.register"],
 	["dsh-web-app", ["trustedHosts"], "webRuntime.trustedHosts"],
@@ -245,6 +256,7 @@ for (const [pkg, anchors, label] of SERVICE_API_ANCHORS) {
 // 6. frontend dist CSS hooks (ADR-0007): the v2 overlay-frost union pins
 // structural local names that live in the web-frontend stylesheet, not in
 // lib/*.js — resolved from the dsh-web-frontend package's dist/assets.
+let frontendChecked = false;
 const frontendDir = (() => {
 	if (existsSync(pnpmDir)) {
 		const entry = readdirSync(pnpmDir).find((e) => e.startsWith("@deepseek-ai+dsh-web-frontend@"));
@@ -255,8 +267,9 @@ const frontendDir = (() => {
 	return existsSync(direct) ? direct : null;
 })();
 if (!frontendDir || !existsSync(frontendDir)) {
-	console.error(`upstream-hooks: frontend dist not found under the runtime — ADR-0007 CSS-hook checks skipped`);
+	console.error(`upstream-hooks: frontend dist not found under the runtime — ADR-0007 CSS-hook checks + slots module-map anchor skipped`);
 } else {
+	frontendChecked = true;
 	const css = readdirSync(frontendDir)
 		.filter((f) => f.endsWith(".css"))
 		.map((f) => readFileSync(join(frontendDir, f), "utf8"))
@@ -298,6 +311,17 @@ if (!frontendDir || !existsSync(frontendDir)) {
 			problems.push(`overlay token dead: "${token}" no longer defined by dsh-client-ui-theme — mask/menu self-frost assumptions broke (ADR-0007)`);
 		}
 	}
+	// 6e. slots service existence (ADR-0011 附录 P1): since 0.2.1-rc.2 the
+	// ui-slots module is compiled into this bundle (module-map key). If the
+	// key vanishes, the plugin's client inject (`@deepseek-ai/dsh-client-ui-
+	// slots` in package.json dsh.client.inject) fails to resolve at runtime.
+	const frontendJs = readdirSync(frontendDir)
+		.filter((f) => f.endsWith(".js"))
+		.map((f) => readFileSync(join(frontendDir, f), "utf8"))
+		.join("\n");
+	if (!frontendJs.includes('"@deepseek-ai/dsh-client-ui-slots"')) {
+		problems.push('service API drift: slots service — the "@deepseek-ai/dsh-client-ui-slots" module-map key no longer exists in the dsh-web-frontend dist; the plugin client inject will fail to resolve');
+	}
 }
 
 // 7. shell-frame surface hooks (ADR-0009): the Windows-Desktop single-paint
@@ -326,12 +350,20 @@ if (layout === "") {
 }
 // ADR-0009 v2: the third neutralized paint lives on the ui-sidebar root
 // (its own `.<hash>_root` paints --dsw-specific-sidebar-fill inside the
-// column). Pin that painted-token line so the selector's premise is checked.
+// column). DESKTOP-ASAR LAYOUT ONLY (ADR-0011 附录 P3): ADR-0009 rules are
+// desktop chrome gated by html[data-windows-titlebar], and the 0.2.1-rc.2
+// WEB build no longer ships any *_root class in ui-sidebar (the fill paint
+// survives under a different local name) — asserting the desktop paint
+// premise against the web store is a category error, same precedent as
+// exact-hash being strict-mode-only. Desktop hand-runs still hard-check
+// this; the pending desktop re-survey is recorded in ADR-0011 附录.
 const sidebarPackage = readAll("dsh-client-ui-sidebar");
 if (sidebarPackage === "") {
 	problems.push("dsh-client-ui-sidebar is not installed under the runtime — the ADR-0009 v2 sidebar-root hook cannot be evaluated");
-} else if (!/\.([A-Za-z0-9_]*)_root\{[^}]*background:var\(--dsw-specific-sidebar-fill\)/.test(sidebarPackage)) {
+} else if (directAsarLayout && !/\.([A-Za-z0-9_]*)_root\{[^}]*background:var\(--dsw-specific-sidebar-fill\)/.test(sidebarPackage)) {
 	problems.push('shell-frame hook dead: the sidebar root no longer paints --dsw-specific-sidebar-fill — re-derive the ADR-0009 v2 [class*="_sidebarCol"] > [class*="_root"] rule');
+} else if (!directAsarLayout) {
+	console.error(`${YELLOW}upstream-hooks: sidebar-root paint premise is desktop-only (ADR-0009 v2) — not judged against the web store (ADR-0011 附录 P3)${RESET}`);
 }
 // Page-wide inventory: [class*="_frame"] / [class*="_sidebarCol"] must only
 // ever match the AppFrame pair. Any OTHER package shipping a *_frame /
@@ -356,6 +388,9 @@ for (const name of SHELL_LOCAL_NAMES) {
 	// parent of a _sidebarCol, and _sidebarCol stays unique to the AppFrame
 	// (its own inventory below). A package appearing here without a guard
 	// entry is still a hard fail; entries record the reviewed set.
+	// 2026-10-19 (ADR-0011 附录 P2): dsh-client-ui-attachment ships an
+	// attachment tile/thumbnail `._frame` — no _sidebarCol child, it can
+	// never match rule 1 or rule 2.
 	const reviewed = name === "frame"
 		? new Set([
 			"dsh-client-ui-layout",
@@ -364,6 +399,7 @@ for (const name of SHELL_LOCAL_NAMES) {
 			"dsh-client-ui-sidebar-documentpreview",
 			"dsh-client-ui-subagent",
 			"dsh-client-ui-user-questions",
+			"dsh-client-ui-attachment",
 		])
 		: new Set(["dsh-client-ui-layout", "dsh-client-ui-settings-shell"]);
 	const unexpected = [...found].filter((pkg) => !reviewed.has(pkg));
@@ -375,10 +411,18 @@ for (const name of SHELL_LOCAL_NAMES) {
 // --- report ----------------------------------------------------------------
 if (problems.length > 0) {
 	for (const problem of problems) console.error(`${RED}upstream-hooks: ${problem}${RESET}`);
+	console.error(`${RED}upstream-hooks: FAILED (${problems.length} problem${problems.length === 1 ? "" : "s"})${RESET}`);
 	process.exit(1);
 }
 const bubbles = [...foundBubbles.keys()].sort().join(", ");
 const bubbleSummary = directAsarLayout
 	? `desktop structural mode: single-bubble inventories + userStack/_stack containers alive; page *_bubble = {${bubbles}}`
 	: `Sixlwa_bubble alive; chat *_bubble = [Sixlwa_bubble]; userStack alive; goal oRe1gG_bubble + _stack alive; page *_bubble = {${bubbles}}`;
-console.log(`✓ upstream hooks OK: ${bubbleSummary}; dark attr alive; service-API anchors alive; overlay hooks alive (_float_/_dialog_/_float* whitelist/mask+menu tokens); shell-frame hooks alive (_frame/_sidebarCol/titlebar marker/content-radius) (${packages.size} @deepseek-ai packages scanned)`);
+const modeSummary = directAsarLayout ? "structural-mode (desktop asar layout)" : "strict-mode (pnpm store layout)";
+const overlaySummary = frontendChecked
+	? "overlay hooks alive (_float_/_dialog_/_pane_/_float* whitelist/mask+menu tokens + slots module map)"
+	: "overlay hooks NOT CHECKED (frontend dist absent under the runtime)";
+const sidebarRootSummary = directAsarLayout
+	? "sidebar-root paint alive"
+	: "sidebar-root paint NOT JUDGED (desktop-only premise, ADR-0011 附录 P3)";
+console.log(`✓ upstream-hooks: VERIFIED ${modeSummary} — ${bubbleSummary}; dark attr alive; service-API anchors alive; ${overlaySummary}; shell-frame hooks alive (_frame/_sidebarCol/titlebar marker/content-radius); ${sidebarRootSummary} (${packages.size} @deepseek-ai packages scanned)`);
