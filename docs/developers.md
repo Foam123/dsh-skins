@@ -27,27 +27,52 @@
 在 `src/client/skins/<id>/index.js` 中导出创建函数：
 
 ```js
+import { frostFamilyCss } from "../frost-family.js";
+
+const SCOPE = "body[data-dsh-my-skin]"; // = bodyAttribute 的 dataset 形式：dshMySkin → data-dsh-my-skin
+
 export function createMySkin({ jsx }) {
   function Mark({ size = 24 }) { /* 返回图标 */ }
   function Name() { /* 返回品牌名 */ }
+
+  const css = `${SCOPE} { /* DSH tokens */ }`;
+  // 浮层毛玻璃家族段（菜单三件套 + 冻层全段）一行取得（ADR-0012）；
+  // TINTS = { frost: { light, dark }, menu: { light, dark } }，tint 自持。
+  const TINTS = { frost: { light: "R, G, B", dark: "R, G, B" }, menu: { light: "R, G, B", dark: "R, G, B" } };
+  const fullCss = `${css}\n${frostFamilyCss(SCOPE, TINTS)}`;
+
+  // project 必须提供：values = catalog 字段当前值（wallpaper / slogan /
+  // panelOpacity 标准字段集，ADR-0004），assets = 已解析的图片资产
+  //（{ <fieldKey>: { url, mime } }）。默认投影必须与烘焙串逐字节相等
+  //（ADR-0004 不变式）。
+  function project(values, assets) {
+    return {
+      bodyAttribute: "dshMySkin",
+      slogans: values.slogan ?? { zh: "中文标语", en: "English slogan" },
+      titleBrand: "My Skin",
+      favicon: { href: "data:image/svg+xml,...", mime: "image/svg+xml" },
+      backdrop: {
+        imageLight: assets?.wallpaper?.url ? `url("${assets.wallpaper.url}")` : null,
+        imageDark: assets?.wallpaper?.url ? `url("${assets.wallpaper.url}")` : null,
+        overlayLight: null,
+        overlayDark: null,
+        blur: 0,
+        desktopBlur: null,
+      },
+      tokenOverrides: null,
+      cssVariables: null,
+      staticCss: fullCss,
+      decorations: null,
+    };
+  }
 
   return {
     id: "my-skin",
     label: "My Skin",
     description: { zh: "一句话描述", en: "One-line description" },
-    bodyAttr: "dshMySkin",
     Mark,
     Name,
-    favicon: "data:image/svg+xml,...",
-    faviconMime: "image/svg+xml",
-    title: "My Skin",
-    css: `body[data-dsh-my-skin] { /* DSH tokens */ }`,
-    art: "",
-    scrimLight: "",
-    scrimDark: "",
-    placeholderLight: "linear-gradient(...)明色",
-    placeholderDark: "linear-gradient(...)暗色",
-    slogans: { zh: "中文标语", en: "English slogan" },
+    project,
   };
 }
 ```
@@ -56,7 +81,7 @@ export function createMySkin({ jsx }) {
 
 1. 在 `src/client/index.js` 中加入对应的 import 与 `runtime.register(...)`；
 2. 在 `src/shared/personalization/catalog.js` 中登记皮肤的字段声明（`fields[]` 与内置资产），即可自动获得个性化面板——支持 `text / color / image / select / range` 五类字段、`single / locale / colorScheme` 三种值作用域；
-3. 需要自定义「值 → 效果」映射时，在皮肤工厂上提供 `project(values, assets)` 纯函数；不提供则走与旧皮肤逐字节等价的内置适配器；
+3. **必须**提供 `project(values, assets)` 纯函数（SkinEffects 形状见 `src/client/personalization/projector.js` 的 `normalizeEffects`）：无 `project` 的目录皮肤经三层回退 fail closed、**永不挂载**——ADR-0004 已删除 legacy 投影通道，不存在任何兜底适配器；
 4. 删除皮肤时反向操作；
 5. 保留 ID `official` 与兼容别名 `default`，不要用于扩展皮肤。
 
