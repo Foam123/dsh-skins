@@ -64,7 +64,7 @@ export function createMySkin({ jsx }) {
 
 `title`（可选）改写浏览器标签页的品牌段，接受与 `label` 相同的字符串或 `{ zh, en }` 形式。官方 `DocumentTitle` 投影器会把标签页维护为「会话名 — DeepSeek Harness」，皮肤挂载期间只替换其中的品牌段、保留会话名；选择官方外观或插件卸载时换回官方品牌。
 
-每个皮肤目录自持品牌标识、favicon、CSS、背景与标语，不从其他皮肤目录导入视觉资源；`runtime.js` 与 `sidebar-switcher.js` 只承载通用机制。
+每个皮肤目录自持品牌标识、favicon、CSS、背景与标语，不从其他皮肤目录导入视觉资源；`runtime.js` 与 `sidebar-switcher.js` 只承载通用机制。浮层毛玻璃等家族级机制住 `src/client/skins/` 平级共享模块（如 `frost-family.js`），tint 色值与品牌资源仍由各皮自持（ADR-0012）。
 
 ## 本地开发与验证
 

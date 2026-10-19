@@ -11,7 +11,9 @@
  * hook drift fails `check` at upgrade time instead of being discovered by
  * eye weeks later.
  *
- * Manifest (keep in sync with the selectors in src/client/skins/*):
+ * Manifest (keep in sync with the selectors in src/client/skins/*)
+ * (frost-family overlay selectors are now centralized in
+ * src/client/skins/frost-family.js, ADR-0012):
  *   1. exact-hash   .Sixlwa_bubble still exists in dsh-client-ui-chat
  *                   (union branch 1; ADR-0006)
  *   2. structural   the chat module still has exactly one *_bubble class

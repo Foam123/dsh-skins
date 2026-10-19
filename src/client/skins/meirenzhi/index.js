@@ -22,8 +22,16 @@ import {
   WALLPAPER_YUNTAI,
   WALLPAPER_ZILING,
 } from "./wallpapers.js";
+import { frostFamilyCss } from "../frost-family.js";
 
 const SCOPE = "body[data-dsh-meirenzhi-skin]";
+
+// 浮层毛玻璃家族 tint（ADR-0012）：menu 与 frost 同值（暖雾白/玄夜），
+// 仍写两组、不靠巧合省略。家族配方与选择器并集住在 frost-family.js。
+const TINTS = {
+  frost: { light: "250, 249, 246", dark: "18, 18, 26" },
+  menu: { light: "250, 249, 246", dark: "18, 18, 26" },
+};
 
 // Mark: user-provided 掌天瓶 icon PNG transcoded to WebP (96px, q75) and
 // inlined as a data URL (2026-09-01 ruling — dragon plate reverted).
@@ -57,61 +65,9 @@ const CSS = [
   `${SCOPE} #root::after{content:"";position:fixed;right:17%;bottom:23%;width:14px;height:14px;z-index:-1;`
     + `background:radial-gradient(circle, rgba(250,249,246,.9) 0%, rgba(250,249,246,0) 70%);opacity:.12;animation:dsh-mrz-drift-b 47s ease-in-out infinite;pointer-events:none}`,
   `@media (prefers-reduced-motion:reduce){${SCOPE}::before,${SCOPE} #root::before,${SCOPE} #root::after{animation:none}}`,
-  // 下拉菜单面（host Menu primitives 的 _material 层）：官方默认
-  // --dsw-menu-surface-fill 仅 45–58% α 且整面 backdrop blur(40px)，透纱皮肤
-  // 下壁纸直接吃进菜单（发灰发白、字看不清）。暖雾白/玄夜较实面板族接管，
-  // specific-menu（宿主 select 列表框消费）同族补齐；blur 保留只管边缘磨砂
-  // （ADR-0007 amendment）。
-  `${SCOPE}{--dsw-menu-surface-fill:rgba(250, 249, 246, 0.94);--dsw-alias-menu-group-header-fill:rgba(250, 249, 246, 0.94);--dsw-specific-menu:rgba(250, 249, 246, 0.94)}`,
-  `${SCOPE}[data-ds-dark-theme]{--dsw-menu-surface-fill:rgba(18, 18, 26, 0.94);--dsw-alias-menu-group-header-fill:rgba(18, 18, 26, 0.94);--dsw-specific-menu:rgba(18, 18, 26, 0.94)}`,
-  // 弹窗毛玻璃（dsh-quota-watch 同款配方）：宿主 Modal（设置页各弹窗、风险
-  // 确认）与 dsh-m / dsh-skins 弹层面板底色偏透，下层文字干扰阅读；
-  // 统一 86% 不透明皮肤底（暖雾白/玄夜）+ blur14 提饱和，下层内容只余柔光。
-  // 宿主弹窗经 CSS modules 哈希 → role/aria 定位；.dshm-*/.dsh-skins-pop 为
-  // 各插件自有稳定类名。--dsw-mask-blur 点亮官方默认 none 的遮罩模糊。
-  // 1.5.1 豁免（ADR-0007 amendment）：dsh-m 截图灯箱 .dsvm-lightbox 根同带
-  // role/aria 语义，浅色 tint 会把影院式黑遮罩染成浅毛玻璃、白色控件整体隐形
-  // （用户双模式实拍）；影院遮罩归 dsh-m 自有不变量（0.9.62 起 background
-  // !important 自持），此处 :not 双保险、语义归位。
-  `${SCOPE}{--dsw-mask-blur:blur(10px)}`,
-  `${SCOPE} [role="dialog"][aria-modal="true"]:not(.dsvm-lightbox),${SCOPE} .dshm-panel,${SCOPE} .dshm-compat-dialog,${SCOPE} .dshm-dshchip-tip,${SCOPE} .dsh-skins-pop{background:color-mix(in srgb,rgb(250, 249, 246) 86%,transparent);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3)}`,
-  `${SCOPE}[data-ds-dark-theme] [role="dialog"][aria-modal="true"]:not(.dsvm-lightbox),${SCOPE}[data-ds-dark-theme] .dshm-panel,${SCOPE}[data-ds-dark-theme] .dshm-compat-dialog,${SCOPE}[data-ds-dark-theme] .dshm-dshchip-tip,${SCOPE}[data-ds-dark-theme] .dsh-skins-pop{background:color-mix(in srgb,rgb(18, 18, 26) 86%,transparent)}`,
-  // 浮层毛玻璃 v2（补漏，ADR-0007）：v1 只盖宿主 Modal 与 .dshm-*/.dsh-skins-pop；
-  // 逐面排查后的剩余缺口——dockkit 悬浮窗壳 _float_（bg-layer-2 皮肤下 α≈0.6
-  // 且无 blur）、宿主对话框非 modal 变体（无 aria-modal，用 _dialog_ 结构兜底）、
-  // dsh-m 的 .dsvm-filterpop/.dsvm-modalbox（fill 基于 bg-base 的
-  // color-mix，皮肤下实际 α≈0.5）与 0.8.x 吸顶分类条 .dsvm-chipswrap
-  // （sticky + bg-base α0.55 无 blur，卡片滚过即透字）。插件遮罩
-  // .dshm-overlay/.dsvm-overlay 点亮
-  // --dsw-mask-blur，弹窗四周一并磨砂。结构钩子由 verify-upstream-hooks 钉住。
-  `${SCOPE} .dshm-overlay,${SCOPE} .dsvm-overlay,${SCOPE} .lc-ov-backdrop,${SCOPE} .lc-modal-backdrop{backdrop-filter:var(--dsw-mask-blur, blur(10px));-webkit-backdrop-filter:var(--dsw-mask-blur, blur(10px))}`,
-  `${SCOPE} [class*="_float_"],${SCOPE} [class*="_dialog_"],${SCOPE} .dsvm-filterpop,${SCOPE} .dsvm-modalbox,${SCOPE} .dsvm-chipswrap{background:color-mix(in srgb,rgb(250, 249, 246) 86%,transparent);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3)}`,
-  `${SCOPE}[data-ds-dark-theme] [class*="_float_"],${SCOPE}[data-ds-dark-theme] [class*="_dialog_"],${SCOPE}[data-ds-dark-theme] .dsvm-filterpop,${SCOPE}[data-ds-dark-theme] .dsvm-modalbox,${SCOPE}[data-ds-dark-theme] .dsvm-chipswrap{background:color-mix(in srgb,rgb(18, 18, 26) 86%,transparent)}`,
-  // 浮层毛玻璃 v3（补漏，ADR-0007 amendment）：dsh-context（上下文洞察）的
-  // 面卡直接以 --dsw-alias-bg-layer-1/3 作底（meirenzhi/tgcf 未覆盖该 token →
-  // 宿主实心，故此前无症状）、自带 0 blur 且不带 role/aria（v1 定位不命中）：
-  // overview/modal 弹层卡 .lc-ov-card/.lc-modal-card（fixed 遮罩也不消费
-  // --dsw-mask-blur）与侧栏右栏内嵌卡 .lc-card/.lc-settings-card。四皮肤同构
-  // 接管为皮肤 tint 86% 实底 + blur14（浮层族同构），遮罩已在 v2 补点。
-  // lc-* 为该插件自有稳定类名（同 .dshm-* 前提，不入宿主守卫）。
-  `${SCOPE} .lc-ov-card,${SCOPE} .lc-modal-card,${SCOPE} .lc-card,${SCOPE} .lc-settings-card{background:color-mix(in srgb,rgb(250, 249, 246) 86%,transparent);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3)}`,
-  `${SCOPE}[data-ds-dark-theme] .lc-ov-card,${SCOPE}[data-ds-dark-theme] .lc-modal-card,${SCOPE}[data-ds-dark-theme] .lc-card,${SCOPE}[data-ds-dark-theme] .lc-settings-card{background:color-mix(in srgb,rgb(18, 18, 26) 86%,transparent)}`,
-  // tooltip 抬升（ADR-0007 amendment，v3 冻层的自伤修复）：v3 让每张
-  // .lc-card 经 backdrop-filter 成为 stacking context，dsh-context 的悬停提示
-  // .lc-tip（group/tip 显影）不是 portal，而是卡内 absolute（z-index:6）悬垂出
-  // 卡底压在相邻卡上——皮肤下被困在本卡上下文里，树序靠后的相邻卡（同样
-  // backdrop-filter）整层盖住它，提示永远不可见（官方卡无 stacking context 故
-  // 无症状）。悬停提示组时把宿主卡抬到兄弟卡之上：relative+z-index 仅悬停期
-  // 生效，布局零位移，毛玻璃配方不动。group/tip 覆盖 stats/brief/files 三族。
-  `${SCOPE} .lc-card:has(.group\\/tip:hover){position:relative;z-index:10}`,
-  // tooltip 可读性/观感统一（ADR-0007 amendment，tooltip 抬升的伴生面）：
-  // .lc-tip 底色走 --dsw-alias-bg-layer-2 且自带 0 blur。meirenzhi 未覆盖该
-  // token、tip 本就是官方实底（无透字问题），但主人裁决三皮肤同构并入浮层
-  // 族配方——与弹层族观感一致，消除独缺一家的分叉。96% 而非家族 86%：
-  // tip 处在抬升卡（backdrop root）内，blur 糊不到下层卡，防透全靠 alpha，
-  // 文字优先的微弹层主人两轮实测 86% 仍嫌透。
-  `${SCOPE} .lc-tip{background:color-mix(in srgb,rgb(250, 249, 246) 96%,transparent);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3)}`,
-  `${SCOPE}[data-ds-dark-theme] .lc-tip{background:color-mix(in srgb,rgb(18, 18, 26) 96%,transparent)}`,
+  // 浮层毛玻璃家族（菜单三件套 + 冻层全段）：配方与选择器并集的唯一来源在
+  // frost-family.js（ADR-0012），本数组只注入 SCOPE 与 tint。
+  frostFamilyCss(SCOPE, TINTS),
 ].join("\n");
 
 /** Panel glass: warm mist white (light) / deep night blue-violet (dark). */

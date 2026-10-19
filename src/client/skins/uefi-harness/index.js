@@ -6,6 +6,7 @@
  * design remains a placeholder until the final design lands.
  */
 import { resolveImageRef } from "../../../shared/personalization/catalog.js";
+import { frostFamilyCss } from "../frost-family.js";
 
 // Official UEFI Forum logo — the red cube with white "uefi" letters, embedded
 // as two vector paths traced from uefi.org's published uefi_logo_red.gif
@@ -53,6 +54,12 @@ export function createUefiHarness({ jsx }) {
     '<path fill="#DC0000" d="' + LOGO_RED + '"/></svg>';
   const favicon = "data:image/svg+xml," + encodeURIComponent(faviconSvg);
 
+  // 浮层毛玻璃家族 tint（ADR-0012）：家族配方与选择器并集住在 frost-family.js，
+  // 本皮肤只自持色值。menu 明与 frost 明同值、暗异（逐字取自下方 token 块现行读数）。
+  const TINTS = {
+    frost: { light: "248, 247, 255", dark: "23, 18, 45" },
+    menu: { light: "248, 247, 255", dark: "28, 22, 55" },
+  };
   const css = `
 body[data-dsh-uefi-harness] {
   --dsw-alias-brand-primary: #6553d8;
@@ -68,11 +75,7 @@ body[data-dsh-uefi-harness] {
   --dsw-specific-sidebar-nav-item-hover: rgba(101, 83, 216, 0.09);
   --dsw-specific-sidebar-nav-item-active: rgba(101, 83, 216, 0.15);
   --dsw-specific-sidebar-nav-item-active-accent: #8b7cff;
-  /* 菜单面较实（openbmc 同注：官方默认 45–58% α 会透过 blur40 吃壁纸，ADR-0007 amendment） */
-  --dsw-menu-surface-fill: rgba(248, 247, 255, 0.94);
-  --dsw-alias-menu-group-header-fill: rgba(248, 247, 255, 0.94);
   --dsw-specific-input-major: rgba(255, 255, 255, 0.62);
-  --dsw-specific-menu: rgba(248, 247, 255, 0.94);
   --dsw-specific-selector: rgba(232, 228, 255, 0.78);
   --dsw-specific-tip: rgba(244, 242, 255, 0.88);
   --dsw-alias-label-primary: #211c36;
@@ -98,10 +101,7 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] {
   --dsw-specific-sidebar-nav-item-hover: rgba(169, 156, 255, 0.10);
   --dsw-specific-sidebar-nav-item-active: rgba(169, 156, 255, 0.17);
   --dsw-specific-sidebar-nav-item-active-accent: #6657a8;
-  --dsw-menu-surface-fill: rgba(28, 22, 55, 0.94);
-  --dsw-alias-menu-group-header-fill: rgba(28, 22, 55, 0.94);
   --dsw-specific-input-major: rgba(42, 34, 78, 0.55);
-  --dsw-specific-menu: rgba(28, 22, 55, 0.94);
   --dsw-specific-selector: rgba(51, 40, 96, 0.78);
   --dsw-specific-tip: rgba(34, 27, 65, 0.90);
   --dsw-alias-label-primary: #f0edff;
@@ -141,129 +141,11 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] :is([class*="oRe1gG_bubble"], [c
   box-shadow: 0 1px 6px rgba(169, 156, 255, 0.10);
 }
 
-/* ---------- 弹窗毛玻璃（dsh-quota-watch 同款配方） ----------
- * 宿主 Modal（设置页各弹窗、风险确认）与 dsh-m / dsh-skins 的弹层面板
- * 底色偏透，下层文字会干扰阅读：统一改为 86% 不透明皮肤底色 + blur14 提饱和，
- * 下层内容被盖住只余柔光。遮罩/对话框由宿主 CSS modules 渲染，类名不可测 →
- * role/aria 属性定位；.dshm-* / .dsh-skins-pop 是各插件自有稳定类名词汇。
- * --dsw-mask-blur 点亮官方默认 none 的遮罩模糊，弹窗四周页面一并磨砂。
- * 1.5.1 豁免（ADR-0007 amendment）：dsh-m 截图灯箱 .dsvm-lightbox 根同带
- * role/aria 语义，浅色 tint 会把影院式黑遮罩染成浅毛玻璃、白色控件整体隐形
- * （用户双模式实拍）；影院遮罩归 dsh-m 自有不变量（0.9.62 起 background
- * !important 自持），此处 :not 双保险、语义归位。 */
-body[data-dsh-uefi-harness] { --dsw-mask-blur: blur(10px); }
-body[data-dsh-uefi-harness] [role="dialog"][aria-modal="true"]:not(.dsvm-lightbox),
-body[data-dsh-uefi-harness] .dshm-panel,
-body[data-dsh-uefi-harness] .dshm-compat-dialog,
-body[data-dsh-uefi-harness] .dshm-dshchip-tip,
-body[data-dsh-uefi-harness] .dsh-skins-pop {
-  background: color-mix(in srgb, rgb(248, 247, 255) 86%, transparent);
-  backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
-}
-body[data-dsh-uefi-harness][data-ds-dark-theme] [role="dialog"][aria-modal="true"]:not(.dsvm-lightbox),
-body[data-dsh-uefi-harness][data-ds-dark-theme] .dshm-panel,
-body[data-dsh-uefi-harness][data-ds-dark-theme] .dshm-compat-dialog,
-body[data-dsh-uefi-harness][data-ds-dark-theme] .dshm-dshchip-tip,
-body[data-dsh-uefi-harness][data-ds-dark-theme] .dsh-skins-pop {
-  background: color-mix(in srgb, rgb(23, 18, 45) 86%, transparent);
-}
+  ${frostFamilyCss("body[data-dsh-uefi-harness]", TINTS)}
 
-/* ---------- 浮层毛玻璃 v2（补漏，ADR-0007） ----------
- * v1 只盖了宿主 Modal（role/aria 定位）与 .dshm-* / .dsh-skins-pop 弹层；
- * 对 0.2.0-rc.2 前端 dist 与已装插件 client CSS 逐面排查后仍有三类浮层缺口：
- *   a. dockkit 悬浮窗壳 _float_：背景走 --dsw-alias-bg-layer-2（皮肤下
- *      α≈0.56–0.64）且全程无 blur——悬浮窗内容直接坐在薄壳上，下层文字
- *      清晰透出（官方壳是实心 token 所以无此问题）；
- *   b. 宿主对话框结构兜底 _dialog_：非 modal 变体不带 aria-modal，v1 的
- *      role/aria 定位不命中；
- *   c. dsh-m 的 .dsvm-filterpop / .dsvm-modalbox：fill 是 bg-base 的
- *      color-mix（86–94%），皮肤下 bg-base 本身半透，实际 α≈0.47–0.52；
- *      0.8.x 新增吸顶分类条 .dsvm-chipswrap 同病（sticky + bg-base α0.55
- *      无 blur，卡片列表从条下滚过即透字）。
- * 另给 .dshm-overlay / .dsvm-overlay 插件遮罩点亮 --dsw-mask-blur（宿主
- * 遮罩已由 v1 点亮，插件自绘遮罩 token 默认 none），弹窗四周一并磨砂，
- * 即使 blur 在弱 GPU 上退化，86% 实底也兜住可读性。结构钩子由
- * verify-upstream-hooks 钉住（_float_ / _dialog_ 清单见守卫脚本）。 */
-body[data-dsh-uefi-harness] .dshm-overlay,
-body[data-dsh-uefi-harness] .dsvm-overlay,
-body[data-dsh-uefi-harness] .lc-ov-backdrop,
-body[data-dsh-uefi-harness] .lc-modal-backdrop {
-  backdrop-filter: var(--dsw-mask-blur, blur(10px));
-  -webkit-backdrop-filter: var(--dsw-mask-blur, blur(10px));
-}
-body[data-dsh-uefi-harness] [class*="_float_"],
-body[data-dsh-uefi-harness] [class*="_dialog_"],
-body[data-dsh-uefi-harness] .dsvm-filterpop,
-body[data-dsh-uefi-harness] .dsvm-modalbox,
-body[data-dsh-uefi-harness] .dsvm-chipswrap {
-  background: color-mix(in srgb, rgb(248, 247, 255) 86%, transparent);
-  backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
-}
-body[data-dsh-uefi-harness][data-ds-dark-theme] [class*="_float_"],
-body[data-dsh-uefi-harness][data-ds-dark-theme] [class*="_dialog_"],
-body[data-dsh-uefi-harness][data-ds-dark-theme] .dsvm-filterpop,
-body[data-dsh-uefi-harness][data-ds-dark-theme] .dsvm-modalbox,
-body[data-dsh-uefi-harness][data-ds-dark-theme] .dsvm-chipswrap {
-  background: color-mix(in srgb, rgb(23, 18, 45) 86%, transparent);
-}
 
-/* ---------- 浮层毛玻璃 v3：dsh-context 弹层卡（ADR-0007 amendment） ----------
- * dsh-context（上下文洞察）的面卡直接以 --dsw-alias-bg-layer-1/3（皮肤下
- * α≈0.48–0.62）作底、自带 0 blur，且不带 role/aria（v1 定位不命中）：
- *   · overview / modal 弹层卡 .lc-ov-card / .lc-modal-card —— fixed 遮罩
- *     .lc-ov-backdrop / .lc-modal-backdrop 也不消费 --dsw-mask-blur，整页
- *     文字清晰透出（用户实拍 #1）；
- *   · 侧栏右栏内嵌卡 .lc-card / .lc-settings-card —— 右栏卡片洗白透底
- *     （用户实拍 #2）。
- * lc-* 为该插件自有稳定类名（同 .dshm-* 前提，不入宿主守卫）；86% 实底 +
- * blur14 并入浮层族，遮罩已在 v2 补点 mask-blur。 */
-body[data-dsh-uefi-harness] .lc-ov-card,
-body[data-dsh-uefi-harness] .lc-modal-card,
-body[data-dsh-uefi-harness] .lc-card,
-body[data-dsh-uefi-harness] .lc-settings-card {
-  background: color-mix(in srgb, rgb(248, 247, 255) 86%, transparent);
-  backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
-}
-body[data-dsh-uefi-harness][data-ds-dark-theme] .lc-ov-card,
-body[data-dsh-uefi-harness][data-ds-dark-theme] .lc-modal-card,
-body[data-dsh-uefi-harness][data-ds-dark-theme] .lc-card,
-body[data-dsh-uefi-harness][data-ds-dark-theme] .lc-settings-card {
-  background: color-mix(in srgb, rgb(23, 18, 45) 86%, transparent);
-}
 
-/* ---------- tooltip 抬升（ADR-0007 amendment，v3 冻层的自伤修复） ----------
- * v3 给每张 .lc-card 点亮 backdrop-filter 后，卡即成为 stacking context：
- * dsh-context 的悬停提示 .lc-tip（group/tip 显影）不是 portal，而是
- * position:absolute + z-index:6 挂在卡内、悬垂出卡底压在相邻卡上——皮肤下
- * 它被困在本卡上下文里，树序靠后的相邻卡（同样 backdrop-filter）整层盖在
- * 上面，提示永远不可见（官方卡无 stacking context 故无症状；headless 取证：
- * tip opacity=1 但完全被下一卡覆盖）。悬停提示组时把宿主卡抬到兄弟卡之上：
- * relative+z-index 仅悬停期生效，布局零位移，毛玻璃配方不动。group/tip
- * 覆盖 stats/brief/files 三族提示（dsh-context 源码仅此三处）。 */
-body[data-dsh-uefi-harness] .lc-card:has(.group\\/tip:hover) {
-  position: relative;
-  z-index: 10;
-}
-
-/* ---------- tooltip 可读性（ADR-0007 amendment，tooltip 抬升的伴生面） ----------
- * .lc-tip 底色走 --dsw-alias-bg-layer-2 且自带 0 blur——uefi 把该 token
- * 覆盖为半透（α≈0.48–0.62），tooltip 抬到相邻卡之上后，下层卡的致密
- * 文字直接从半透 tip 底上透出。并入浮层族配方（皮肤 tint + blur14）。
- * 96% 而非家族 86%：tip 处在抬升卡（backdrop root）内，blur 只采样卡内
- * 内容、糊不到下层卡，防透全靠 alpha；文字优先的微弹层主人两轮实测
- * 86% 仍嫌透，96% 实底保留一丝玻璃感。meirenzhi/tgcf 未覆盖 bg-layer-*
- * token、tip 已是官方实底，仍按主人裁决三皮肤同构并入（观感统一）。 */
-body[data-dsh-uefi-harness] .lc-tip {
-  background: color-mix(in srgb, rgb(248, 247, 255) 96%, transparent);
-  backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
-}
-body[data-dsh-uefi-harness][data-ds-dark-theme] .lc-tip {
-  background: color-mix(in srgb, rgb(23, 18, 45) 96%, transparent);
-}`;
+`;
 
   /** 背景原画 · 鎏金电路板微距（480x346 原摄 → 1920x1384 WebP，70KB；4x 虚化景深读作 bokeh，仅四角微压靛影以保留金色辉光） */
   const BACKGROUND_ART =

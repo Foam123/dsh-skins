@@ -20,6 +20,28 @@ const skins = [
   { id: "uefi", css: createUefiHarness({ jsx }).css.replaceAll(/\s+/g, "") },
 ];
 
+// Per-skin tint data, merged from the former four per-skin tables into one
+// place per skin. frostDark serves both dark-frost assertions;
+// tipLight/tipDark are the 96% .lc-tip pairs; menuLight/menuDark are the
+// 0.94 rgba menu-trio pairs.
+const SKIN_TINTS = {
+  openbmc: {
+    frostDark: "rgb(12,26,38)86%",
+    tipLight: "rgb(247,250,252)96%", tipDark: "rgb(12,26,38)96%",
+    menuLight: "rgba(242,247,251,0.94)", menuDark: "rgba(14,33,48,0.94)",
+  },
+  meirenzhi: {
+    frostDark: "rgb(18,18,26)86%",
+    tipLight: "rgb(250,249,246)96%", tipDark: "rgb(18,18,26)96%",
+    menuLight: "rgba(250,249,246,0.94)", menuDark: "rgba(18,18,26,0.94)",
+  },
+  uefi: {
+    frostDark: "rgb(23,18,45)86%",
+    tipLight: "rgb(248,247,255)96%", tipDark: "rgb(23,18,45)96%",
+    menuLight: "rgba(248,247,255,0.94)", menuDark: "rgba(28,22,55,0.94)",
+  },
+};
+
 test("v1 dialog recipe survives in all three skins", () => {
   for (const { id, css } of skins) {
     assert.ok(css.includes('[role="dialog"][aria-modal="true"]'), `${id}: v1 role/aria hook missing`);
@@ -70,14 +92,9 @@ test("v2 overlay-frost union present in all three skins (ADR-0007)", () => {
 });
 
 test("v2 union carries a dark-theme variant per skin", () => {
-  const darkAnchors = {
-    openbmc: "rgb(12,26,38)86%",
-    meirenzhi: "rgb(18,18,26)86%",
-    uefi: "rgb(23,18,45)86%",
-  };
   for (const { id, css } of skins) {
     assert.ok(
-      new RegExp(`data-ds-dark-theme\\][^{]*\\[class\\*="_float_"\\][^{]*\\{[^{}]*color-mix\\(insrgb,${darkAnchors[id].replaceAll(/([()])/g, "\\$&")}`).test(css),
+      new RegExp(`data-ds-dark-theme\\][^{]*\\[class\\*="_float_"\\][^{]*\\{[^{}]*color-mix\\(insrgb,${SKIN_TINTS[id].frostDark.replaceAll(/([()])/g, "\\$&")}`).test(css),
       `${id}: dark frost tint for the float shell missing`,
     );
   }
@@ -89,11 +106,6 @@ test("v3 dsh-context overlay cards frosted in all three skins (ADR-0007 amendmen
   // consume --dsw-mask-blur. The lc-* classes are the plugin's own stable names
   // (same standing as .dshm-* — no host guard). Covered: overview/modal cards
   // (user photo #1) AND the sidebar-embedded cards (user photo #2).
-  const darkTints = {
-    openbmc: "rgb(12,26,38)86%",
-    meirenzhi: "rgb(18,18,26)86%",
-    uefi: "rgb(23,18,45)86%",
-  };
   for (const { id, css } of skins) {
     // overview / modal / sidebar-embedded cards carry the frost declaration
     // in the SAME rule block
@@ -112,7 +124,7 @@ test("v3 dsh-context overlay cards frosted in all three skins (ADR-0007 amendmen
     }
     // dark-theme variant per skin
     assert.ok(
-      new RegExp(`data-ds-dark-theme\\][^{]*\\.lc-ov-card[^{}]*\\{[^{}]*color-mix\\(insrgb,${darkTints[id].replaceAll(/([()])/g, "\\$&")}`).test(css),
+      new RegExp(`data-ds-dark-theme\\][^{]*\\.lc-ov-card[^{}]*\\{[^{}]*color-mix\\(insrgb,${SKIN_TINTS[id].frostDark.replaceAll(/([()])/g, "\\$&")}`).test(css),
       `${id}: dark frost tint for .lc-ov-card missing`,
     );
   }
@@ -138,13 +150,8 @@ test("v3.2 .lc-tip readability frost in all three skins (ADR-0007 amendment)", (
   // the opaque host value but the owner ruled for 同构统一 with the frost
   // family anyway (visual consistency, ADR-0007 v1.2.3 precedent). All three
   // carry the family recipe (96% tint + blur14), dark variant swaps the tint.
-  const tints = {
-    openbmc: ["rgb(247,250,252)96%", "rgb(12,26,38)96%"],
-    meirenzhi: ["rgb(250,249,246)96%", "rgb(18,18,26)96%"],
-    uefi: ["rgb(248,247,255)96%", "rgb(23,18,45)96%"],
-  };
   for (const { id, css } of skins) {
-    const [light, dark] = tints[id];
+    const { tipLight: light, tipDark: dark } = SKIN_TINTS[id];
     assert.ok(
       new RegExp(`\\.lc-tip\\{[^{}]*color-mix\\(insrgb,${light.replaceAll(/([()])/g, "\\$&")}[^{}]*backdrop-filter:blur\\(14px\\)saturate\\(1\\.3\\)`).test(css),
       `${id}: .lc-tip frost rule missing for tint ${light}`,
@@ -170,13 +177,8 @@ test("menu surface fill is skin-owned and 较实 in all three skins (ADR-0007 am
   // blur(40px): crisp over the official opaque shell, but in the skins it
   // samples the wallpaper and the dropdown turns to mush. Every skin owns the
   // fill with its own tint family at 0.94 (same family as --dsw-specific-menu).
-  const menuTints = {
-    openbmc: ["rgba(242,247,251,0.94)", "rgba(14,33,48,0.94)"],
-    meirenzhi: ["rgba(250,249,246,0.94)", "rgba(18,18,26,0.94)"],
-    uefi: ["rgba(248,247,255,0.94)", "rgba(28,22,55,0.94)"],
-  };
   for (const { id, css } of skins) {
-    const [light, dark] = menuTints[id];
+    const { menuLight: light, menuDark: dark } = SKIN_TINTS[id];
     for (const token of ["--dsw-menu-surface-fill:", "--dsw-alias-menu-group-header-fill:", "--dsw-specific-menu:"]) {
       assert.ok(css.includes(token + light), `${id}: ${token} light tint missing`);
       assert.ok(css.includes(token + dark), `${id}: ${token} dark tint missing`);
