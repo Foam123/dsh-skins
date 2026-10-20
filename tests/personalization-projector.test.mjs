@@ -226,8 +226,8 @@ test("the REAL openbmc and uefi factories project their baked defaults verbatim"
     assert.ok(result.effects.backdrop.imageDark.startsWith("linear-gradient(rgba("));
     assert.deepEqual(result.effects.slogans, defaultsFor(skin.id).slogan, "catalog is the single slogan source (B14)");
     assert.equal(result.effects.titleBrand, skin.id === "openbmc" ? "OpenBMC Studio" : "UEFI Studio");
-    // favicon 是静态资产：starts-with + mime 弱化断言，行为层由 smoke 兜底。
-    assert.ok(result.effects.favicon.href.startsWith("data:"));
+    // favicon 是静态资产：starts-with + mime 弱化断言（计划示例口径 data:image/），行为层由 smoke 兜底。
+    assert.ok(result.effects.favicon.href.startsWith("data:image/"));
     assert.equal(typeof result.effects.favicon.mime, "string");
     assert.equal(result.effects.staticCss.includes("backdrop-filter:blur(var("), false, "no glass rule at the anchor");
     assert.equal(result.effects.bodyAttribute, skin.id === "openbmc" ? "dshOpenbmcSkin" : "dshUefiHarness");

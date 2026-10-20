@@ -220,7 +220,7 @@ for (const [skinId, spec] of Object.entries(GOLD)) {
     }
   });
 
-  test(`${skinId}: monotonicity — per-token alpha and blur never decrease (P=0..100 step 5)`, () => {
+  test(`${skinId}: monotonicity — per-token alpha (light AND dark) and blur never decrease (P=0..100 step 5)`, () => {
     let prevBlur = -1;
     const prevAlpha = {};
     for (let P = 0; P <= 100; P += 5) {
@@ -228,10 +228,12 @@ for (const [skinId, spec] of Object.entries(GOLD)) {
       assert.ok(fx.backdrop.blur >= prevBlur, `${skinId} blur monotone @P=${P}`);
       prevBlur = fx.backdrop.blur;
       for (const token of Object.keys(spec.riding)) {
-        const key = `${token}|light`;
-        const value = Number.parseFloat(fx.tokenOverrides[token].light.slice(-5));
-        if (prevAlpha[key] !== undefined) assert.ok(value >= prevAlpha[key], `${skinId} ${token} light monotone @P=${P}`);
-        prevAlpha[key] = value;
+        for (const mode of ["light", "dark"]) {
+          const key = `${token}|${mode}`;
+          const value = Number.parseFloat(fx.tokenOverrides[token][mode].slice(-5));
+          if (prevAlpha[key] !== undefined) assert.ok(value >= prevAlpha[key], `${skinId} ${token} ${mode} monotone @P=${P}`);
+          prevAlpha[key] = value;
+        }
       }
     }
   });
