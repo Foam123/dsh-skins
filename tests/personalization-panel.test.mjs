@@ -825,6 +825,19 @@ test("delete confirm lists preview-layer references too, cross-skin (ADR-0015)",
   assert.ok(panel.confirms[0].includes("personalization.library.previewRef"), "marked as unsaved");
 });
 
+test("clear-library confirm lists preview-layer references too (ADR-0015)", async () => {
+  const asset = { id: "u_0123456789abcdef0123456789abcdef", displayName: "p.png" };
+  const config = makeConfigClient({ library: [asset] }); // zero persisted references
+  config.preview("openbmc", "wallpaper", asset.id); // will be excised+reverted by the clear
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  findButton(panel.tree(), "personalization.library.clear").props.onClick();
+  await tick();
+  const text = textsOf(panel.tree()).find((value) => value.includes("personalization.library.clearConfirm"));
+  assert.ok(text.includes("openbmc · wallpaper"), "the preview-layer ref is listed in the clear confirm");
+  assert.ok(text.includes("personalization.library.previewRef"), "marked as unsaved — same knowing consent as single delete");
+});
+
 test("unreferenced assets with no preview refs still delete without confirmation", async () => {
   const asset = { id: "u_0123456789abcdef0123456789abcdef", displayName: "free.png" };
   const deleted = [];
