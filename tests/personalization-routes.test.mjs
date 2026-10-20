@@ -361,3 +361,47 @@ test("malformed JSON bodies map to INVALID_CONFIG 400, not 500", async () => {
   assert.equal(state.status, 400);
   assert.equal(JSON.parse(state.body).code, "INVALID_CONFIG");
 });
+
+// ---- ADR-0015 green fence: behaviors that must NOT change ------------------
+// Pinned BEFORE the write-dialect work so the compat adapter refactor and the
+// op-vocabulary extension both run against a fixed baseline.
+
+test("fence: DELETE /library/{id} works with no precondition and returns {revision, affectedSkins}", async () => {
+  const { call, store } = makeHarness();
+  const upload = await call(makeRequest({
+    method: "POST",
+    url: "/dsh-skins/library",
+    headers: { ...TRUSTED, "content-type": "image/png", "x-filename": encodeURIComponent("fence.png") },
+    body: pngBytes(),
+  }));
+  assert.equal(upload.status, 201);
+  const { asset, revision: afterUpload } = JSON.parse(upload.body);
+  assert.equal(afterUpload, 1);
+
+  // No precondition of any kind rides on this DELETE (mixed-version tolerance,
+  // ADR-0015/Q4): today's unconditional semantics are the compatibility floor.
+  const removed = await call(makeRequest({
+    method: "DELETE",
+    url: `/dsh-skins/library/${asset.id}`,
+    headers: TRUSTED,
+  }));
+  assert.equal(removed.status, 200);
+  const body = JSON.parse(removed.body);
+  assert.equal(body.revision, 2, "delete bumps the revision exactly once");
+  assert.deepEqual(body.affectedSkins, [], "no field referenced the asset");
+  assert.equal(store.snapshot().revision, 2);
+  assert.equal(store.snapshot().library.length, 0);
+});
+
+test("fence: PATCH with an unknown op is INVALID_CONFIG 400 and commits nothing", async () => {
+  const { call, store } = makeHarness();
+  const state = await call(makeRequest({
+    method: "PATCH",
+    url: "/dsh-skins/config",
+    headers: { ...TRUSTED, "content-type": "application/json" },
+    body: { baseRevision: 0, operations: [{ op: "nuke", skinId: "meirenzhi", key: "panelOpacity" }] },
+  }));
+  assert.equal(state.status, 400);
+  assert.equal(JSON.parse(state.body).code, "INVALID_CONFIG");
+  assert.equal(store.snapshot().revision, 0, "unknown ops never reach the draft");
+});
