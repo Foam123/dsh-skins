@@ -7,8 +7,8 @@
  *   blur       = round(max·max(0,(P − anchor)/(100 − anchor))²)（锚点恒 0）
  * 桌面模糊增益率（P/rate，钳 24）与出厂锚是两个概念，绝不共用参数。
  * values.panelOpacity 的定义域 [0,100] 由字段目录的 range 校验保证
- * （mergeValues → validateOverride，越界回落默认值）；本模块仅在 riding α
- * 内做钳位，blur 曲线不重复钳 P——越界输入不在支持范围。
+ * （mergeValues → validateOverride，越界回落默认值）；riding α 与 overlay
+ * 纱 t 在各自公式内做钳位，blur 曲线不重复钳 P——越界输入不在支持范围。
  * 投影不感知 profile：Desktop 出厂 66 属字段目录的默认层，只经 values
  * 进入；本模块永远不知道自己跑在哪个 profile 上。
  *
