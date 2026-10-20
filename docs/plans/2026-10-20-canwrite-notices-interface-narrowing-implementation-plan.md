@@ -183,3 +183,10 @@ writeGate(): null | "loading" | "offline" | "unsupported" | "recovery"
 - 验收 grep 门四组通过（Task 5 Step 4；含 panel 推导清零的正反两式全覆盖判据）。
 - 修改摘要覆盖：api 成员增删、publicState 字段增删、panel 五个接线点（:476/:495/:543/:556-578/:237-248）、测试迁移清单、ADR/GLOSSARY 留痕。
 - 明确非目标（不做）：版本 bump 与发版（随下一个自然 1.5.x）；flush 错误稳定码本地化改造；`revisionedPatch` 共享核（H2 后续任务）。
+
+## 收尾记录（2026-10-21）
+
+- Task 1–5 全部完成。执行序列（main，六提交）：`769d52e` 基线文档 → `6ee5ebe` 绿色围栏 → `cb714e9` canWrite 切片 → `729579d` notices 切片 → `bc90eee` referencesFor 切片 → `a71fb21` ADR-0003 修正案。
+- `pnpm run check` 全绿（339 测试 + README 配对 + bundle 守卫 + 上游钩子 strict VERIFIED + lib-sync 零差异）；验收 grep 门四组全过（panel 推导清零正反两式 + mode 恰 1 残存、三元组 src 零命中、api 无被删成员、configClient.retry/dirtyFields 零调用）。
+- 执行期发现并当场处理的两处计划外缺陷：① config-client api 残留 `retry,` 成员引用（函数已删，模块加载即 ReferenceError，60 测试全红暴露，移除后复绿）；② panel.test 假件 `refetch` 重复键（原假件本有一个 no-op `refetch`，Task 2 新增计数版被后者覆盖、计数失效，合并为单一计数版）。两处均在对应任务 checkpoint 内修复，未越 G0 红线。
+- 版本未 bump、未发版（按 B13 随下一个自然 1.5.x 搭车）。
