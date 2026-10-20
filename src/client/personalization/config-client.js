@@ -72,7 +72,9 @@ export function createConfigClient(options = {}) {
   function setFlushFailure(code, message) {
     notices = notices.filter((notice) => notice.kind === "reverted");
     if (code === "REVISION_CONFLICT") notices.push({ kind: "conflict" });
-    else if (message !== null) notices.push({ kind: "error", message });
+    // Truthy on purpose: an empty-string host message is suppressed exactly
+    // as the pre-notices panel's falsy strip check did (pixel-parity red line).
+    else if (message) notices.push({ kind: "error", message });
   }
 
   /** Name one excised dangling field on the reverted notice (dedup by field). */

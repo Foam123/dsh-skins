@@ -167,6 +167,18 @@ for (const skinId of SKINS) {
   }
 }
 
+test("the offline retry button drives refetch (retry is gone from the api)", async () => {
+  const config = makeConfigClient({});
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  config.setState({ status: "offline-failed" });
+  await tick();
+  const retry = findButton(panel.tree(), "personalization.status.retry");
+  assert.notEqual(retry, null, "retry offered while offline");
+  retry.props.onClick();
+  assert.equal(config.calls.refetch, 1, "the button re-points to refetch, not the deleted retry member");
+});
+
 test("meirenzhi slider renders Desktop factory 66 and Web factory 35, including after reset", async () => {
   for (const [desktop, expected] of [[true, "66%"], [false, "35%"]]) {
     const config = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 70 } } });

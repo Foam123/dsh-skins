@@ -482,7 +482,26 @@ test("fence: a STORE_READONLY downgrade clears the surfaced error strip", async 
   assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "conflict", errorMessage: "readonly" });
   const downgraded = client.getState();
   assert.equal(downgraded.status, "unsupported-readonly");
-  assert.deepEqual(downgraded.notices, [], "the downgrade clears every flush notice");
+  assert.equal(downgraded.notices.some((n) => n.kind === "error"), false, "the downgrade clears the error");
+  assert.equal(downgraded.notices.some((n) => n.kind === "conflict"), false);
+  client.dispose();
+});
+
+test("an empty-string host error message surfaces no notice (pre-notices falsy parity)", async () => {
+  const fetchImpl = makeFetch((index, url, init) => {
+    if (init?.method === "PATCH") return jsonResponse(400, { error: "", code: "INVALID_CONFIG" });
+    return snapshotBody();
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  client.preview("meirenzhi", "panelOpacity", 3);
+  const result = await client.flushNow();
+  // The flush still fails loudly to the caller — only the STRIP is silent,
+  // exactly as the old panel's truthy check rendered nothing for "".
+  assert.deepEqual(result, { flushed: 0, blocked: "error", errorMessage: "" });
+  assert.equal(client.getState().notices.some((n) => n.kind === "error"), false,
+    "empty message → no error notice (old panel rendered no strip)");
+  assert.equal(client.getState().dirtyCount, 1, "the preview stays dirty for retry");
   client.dispose();
 });
 
