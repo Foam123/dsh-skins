@@ -368,6 +368,136 @@ test("exhausted revision-conflict retry surfaces a machine-readable failure unti
   client.dispose();
 });
 
+// ---- lifecycle fence (green fence — pins the semantics notices must inherit;
+// wording migrates to notices in the interface-narrowing Task 3) --------------
+
+test("fence: an edit clears conflict/error but the reverted notice survives", async () => {
+  let patchCount = 0;
+  let revision = 7;
+  const fetchImpl = makeFetch((index, url, init) => {
+    if (init?.method === "PATCH") {
+      patchCount += 1;
+      if (patchCount === 1) {
+        return jsonResponse(400, {
+          error: "校验失败", code: "INVALID_CONFIG",
+          params: {
+            code: "MISSING_ASSET",
+            issues: [{ opIndex: 0, skinId: "openbmc", key: "wallpaper", code: "MISSING_ASSET" }],
+          },
+        });
+      }
+      return jsonResponse(409, { code: "REVISION_CONFLICT", error: "stale" });
+    }
+    if (patchCount > 0) revision = 8;
+    return snapshotBody({ revision });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  client.preview("openbmc", "wallpaper", "u_ffffffffffffffffffffffffffffffff");
+  await client.flushNow();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.deepEqual(client.getState().revertedFields,
+    [{ skinId: "openbmc", key: "wallpaper" }], "the dangling excision named the field");
+  client.preview("meirenzhi", "panelOpacity", 3);
+  assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "conflict" });
+  const conflicted = client.getState();
+  assert.equal(conflicted.lastFlushCode, "REVISION_CONFLICT");
+  assert.deepEqual(conflicted.revertedFields,
+    [{ skinId: "openbmc", key: "wallpaper" }], "the conflict path must not retire the reverted notice");
+  client.preview("meirenzhi", "panelOpacity", 4);
+  const afterEdit = client.getState();
+  assert.equal(afterEdit.lastFlushCode, null, "an edit clears the conflict");
+  assert.equal(afterEdit.lastFlushError, null);
+  assert.deepEqual(afterEdit.revertedFields,
+    [{ skinId: "openbmc", key: "wallpaper" }], "an edit must NOT clear the reverted notice");
+  client.dispose();
+});
+
+test("fence: a healthy flush retires the error strip AND the reverted notice", async () => {
+  let patchCount = 0;
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      patchCount += 1;
+      if (patchCount === 1) {
+        return jsonResponse(400, {
+          error: "校验失败", code: "INVALID_CONFIG",
+          params: {
+            code: "MISSING_ASSET",
+            issues: [
+              { opIndex: 0, skinId: "openbmc", key: "wallpaper", code: "MISSING_ASSET" },
+              { opIndex: 1, skinId: "meirenzhi", key: "panelOpacity", code: "BAD_VALUE" },
+            ],
+          },
+        });
+      }
+      return jsonResponse(200, { revision: 9 });
+    }
+    return snapshotBody({ revision: 9 });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  client.preview("openbmc", "wallpaper", "u_ffffffffffffffffffffffffffffffff");
+  client.preview("meirenzhi", "panelOpacity", 3);
+  await client.flushNow();
+  const mixed = client.getState();
+  assert.equal(mixed.lastFlushError, "校验失败");
+  assert.deepEqual(mixed.revertedFields, [{ skinId: "openbmc", key: "wallpaper" }]);
+  // The post-excision continuation (or an explicit re-flush — whichever runs)
+  // lands PATCH 2 as a success; the healthy flush must retire BOTH notices.
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  await client.flushNow();
+  const healed = client.getState();
+  assert.equal(healed.lastFlushCode, null);
+  assert.equal(healed.lastFlushError, null);
+  assert.deepEqual(healed.revertedFields, [], "a healthy flush retires the reverted notice");
+  assert.equal(healed.dirtyCount, 0);
+  client.dispose();
+});
+
+test("fence: a STORE_READONLY downgrade clears the surfaced error strip", async () => {
+  let patchCount = 0;
+  const fetchImpl = makeFetch((index, url, init) => {
+    if (init?.method === "PATCH") {
+      patchCount += 1;
+      if (patchCount === 1) {
+        return jsonResponse(400, {
+          error: "boom", code: "INVALID_CONFIG",
+          params: {
+            code: "BAD_VALUE",
+            issues: [{ opIndex: 0, skinId: "meirenzhi", key: "panelOpacity", code: "BAD_VALUE" }],
+          },
+        });
+      }
+      return jsonResponse(409, { code: "STORE_READONLY", error: "readonly" });
+    }
+    return snapshotBody();
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  client.preview("meirenzhi", "panelOpacity", 3);
+  await client.flushNow();
+  assert.equal(client.getState().lastFlushError, "boom");
+  // The BAD_VALUE preview stays dirty — re-flush it straight into the
+  // downgrade; no edit in between (an edit would clear the strip itself).
+  assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "conflict", errorMessage: "readonly" });
+  const downgraded = client.getState();
+  assert.equal(downgraded.status, "unsupported-readonly");
+  assert.equal(downgraded.lastFlushCode, null);
+  assert.equal(downgraded.lastFlushError, null, "the downgrade clears the surfaced error");
+  client.dispose();
+});
+
+test("fence: offline gates deleteImage locally with zero PATCH attempts", async () => {
+  const fetchImpl = makeFetch(() => { throw new Error("network down"); });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  assert.equal(client.getState().status, "offline-failed");
+  const callsAfterBoot = fetchImpl.calls.length;
+  assert.deepEqual(await client.deleteImage("u_b"), { error: "offline" });
+  assert.equal(fetchImpl.calls.length, callsAfterBoot, "no PATCH was attempted while offline");
+  client.dispose();
+});
+
 test("STORE_RECOVERY_REQUIRED refetches recovery state without retrying PATCH", async () => {
   let patchCount = 0;
   const fetchImpl = makeFetch((index, url, init) => {
