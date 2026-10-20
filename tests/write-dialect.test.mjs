@@ -138,9 +138,9 @@ test("acceptance ②: dangling preview self-heals end to end (409 → refetch �
   assert.deepEqual(flushed, { flushed: 0, blocked: null, selfHealed: true },
     "dangling-only: self-healed, not blocked");
   const state = client.getState();
-  assert.deepEqual(state.revertedFields, [{ skinId: "openbmc", key: "wallpaper" }],
+  assert.deepEqual((state.notices.find((n) => n.kind === "reverted")?.fields ?? []), [{ skinId: "openbmc", key: "wallpaper" }],
     "the poison is named, not silenced");
-  assert.equal(state.lastFlushError, null, "dangling-only: no generic failure strip");
+  assert.equal(state.notices.some((n) => n.kind === "error"), false, "dangling-only: no generic failure strip");
   assert.equal(state.dirtyCount, 0, "the doomed preview is gone");
   assert.equal(h.store.snapshot().skins.openbmc, undefined, "nothing was persisted for it");
 
@@ -148,7 +148,7 @@ test("acceptance ②: dangling preview self-heals end to end (409 → refetch �
   client.preview("meirenzhi", "slogan", { zh: "甲", en: "A" });
   const healed = await client.flushNow();
   assert.equal(healed.flushed, 1);
-  assert.deepEqual(client.getState().revertedFields, [], "a healthy flush retires the notice");
+  assert.deepEqual((client.getState().notices.find((n) => n.kind === "reverted")?.fields ?? []), [], "a healthy flush retires the notice");
   assert.deepEqual(h.store.snapshot().skins.meirenzhi, { slogan: { zh: "甲", en: "A" } });
   client.dispose();
 });

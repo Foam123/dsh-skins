@@ -359,17 +359,16 @@ test("exhausted revision-conflict retry surfaces a machine-readable failure unti
   client.preview("meirenzhi", "panelOpacity", 3);
   assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "conflict" });
   assert.equal(patchCount, 2);
-  assert.equal(client.getState().lastFlushCode, "REVISION_CONFLICT");
-  assert.equal(client.getState().lastFlushError, null);
+  assert.ok(client.getState().notices.some((n) => n.kind === "conflict"));
+  assert.equal(client.getState().notices.some((n) => n.kind === "error"), false);
   assert.equal(client.getState().dirtyCount, 1);
   client.preview("meirenzhi", "panelOpacity", 4);
-  assert.equal(client.getState().lastFlushCode, null);
-  assert.equal(client.getState().lastFlushError, null);
+  assert.equal(client.getState().notices.some((n) => n.kind === "conflict"), false);
+  assert.equal(client.getState().notices.some((n) => n.kind === "error"), false);
   client.dispose();
 });
 
-// ---- lifecycle fence (green fence — pins the semantics notices must inherit;
-// wording migrates to notices in the interface-narrowing Task 3) --------------
+// ---- lifecycle fence (pins the notices semantics — Task 3 wording) ----------
 
 test("fence: an edit clears conflict/error but the reverted notice survives", async () => {
   let patchCount = 0;
@@ -396,19 +395,19 @@ test("fence: an edit clears conflict/error but the reverted notice survives", as
   client.preview("openbmc", "wallpaper", "u_ffffffffffffffffffffffffffffffff");
   await client.flushNow();
   await new Promise((resolve) => setTimeout(resolve, 25));
-  assert.deepEqual(client.getState().revertedFields,
+  assert.deepEqual(client.getState().notices.find((n) => n.kind === "reverted")?.fields,
     [{ skinId: "openbmc", key: "wallpaper" }], "the dangling excision named the field");
   client.preview("meirenzhi", "panelOpacity", 3);
   assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "conflict" });
   const conflicted = client.getState();
-  assert.equal(conflicted.lastFlushCode, "REVISION_CONFLICT");
-  assert.deepEqual(conflicted.revertedFields,
+  assert.ok(conflicted.notices.some((n) => n.kind === "conflict"), "conflict notice surfaced");
+  assert.deepEqual(conflicted.notices.find((n) => n.kind === "reverted")?.fields,
     [{ skinId: "openbmc", key: "wallpaper" }], "the conflict path must not retire the reverted notice");
   client.preview("meirenzhi", "panelOpacity", 4);
   const afterEdit = client.getState();
-  assert.equal(afterEdit.lastFlushCode, null, "an edit clears the conflict");
-  assert.equal(afterEdit.lastFlushError, null);
-  assert.deepEqual(afterEdit.revertedFields,
+  assert.equal(afterEdit.notices.some((n) => n.kind === "conflict"), false, "an edit clears the conflict");
+  assert.equal(afterEdit.notices.some((n) => n.kind === "error"), false, "an edit clears the error");
+  assert.deepEqual(afterEdit.notices.find((n) => n.kind === "reverted")?.fields,
     [{ skinId: "openbmc", key: "wallpaper" }], "an edit must NOT clear the reverted notice");
   client.dispose();
 });
@@ -440,16 +439,17 @@ test("fence: a healthy flush retires the error strip AND the reverted notice", a
   client.preview("meirenzhi", "panelOpacity", 3);
   await client.flushNow();
   const mixed = client.getState();
-  assert.equal(mixed.lastFlushError, "校验失败");
-  assert.deepEqual(mixed.revertedFields, [{ skinId: "openbmc", key: "wallpaper" }]);
+  assert.equal(mixed.notices.find((n) => n.kind === "error")?.message, "校验失败");
+  assert.deepEqual(mixed.notices.find((n) => n.kind === "reverted")?.fields,
+    [{ skinId: "openbmc", key: "wallpaper" }]);
+  assert.ok(mixed.notices.some((n) => n.kind === "error") && mixed.notices.some((n) => n.kind === "reverted"),
+    "partial-dangling: error and reverted coexist — the only legal coexistence");
   // The post-excision continuation (or an explicit re-flush — whichever runs)
   // lands PATCH 2 as a success; the healthy flush must retire BOTH notices.
   await new Promise((resolve) => setTimeout(resolve, 25));
   await client.flushNow();
   const healed = client.getState();
-  assert.equal(healed.lastFlushCode, null);
-  assert.equal(healed.lastFlushError, null);
-  assert.deepEqual(healed.revertedFields, [], "a healthy flush retires the reverted notice");
+  assert.deepEqual(healed.notices, [], "a healthy flush retires every notice");
   assert.equal(healed.dirtyCount, 0);
   client.dispose();
 });
@@ -476,14 +476,45 @@ test("fence: a STORE_READONLY downgrade clears the surfaced error strip", async 
   await client.boot();
   client.preview("meirenzhi", "panelOpacity", 3);
   await client.flushNow();
-  assert.equal(client.getState().lastFlushError, "boom");
+  assert.equal(client.getState().notices.find((n) => n.kind === "error")?.message, "boom");
   // The BAD_VALUE preview stays dirty — re-flush it straight into the
   // downgrade; no edit in between (an edit would clear the strip itself).
   assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "conflict", errorMessage: "readonly" });
   const downgraded = client.getState();
   assert.equal(downgraded.status, "unsupported-readonly");
-  assert.equal(downgraded.lastFlushCode, null);
-  assert.equal(downgraded.lastFlushError, null, "the downgrade clears the surfaced error");
+  assert.deepEqual(downgraded.notices, [], "the downgrade clears every flush notice");
+  client.dispose();
+});
+
+test("notices: conflict and error stay kind-exclusive (at most one per kind)", async () => {
+  // A conflict surfacing after an error must REPLACE it, not stack: the
+  // kind-uniqueness invariant the panel's strip rendering relies on.
+  let phase = "error";
+  let patchCount = 0;
+  const fetchImpl = makeFetch((index, url, init) => {
+    if (init?.method === "PATCH") {
+      patchCount += 1;
+      if (phase === "error") {
+        return jsonResponse(400, {
+          error: "first", code: "INVALID_CONFIG",
+          params: { code: "BAD_VALUE", issues: [{ opIndex: 0, skinId: "meirenzhi", key: "panelOpacity", code: "BAD_VALUE" }] },
+        });
+      }
+      return jsonResponse(409, { code: "REVISION_CONFLICT", error: "stale" });
+    }
+    return snapshotBody({ revision: patchCount > 0 ? 8 : 7 });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  client.preview("meirenzhi", "panelOpacity", 3);
+  await client.flushNow();
+  assert.ok(client.getState().notices.some((n) => n.kind === "error"), "error surfaced first");
+  phase = "conflict";
+  await client.flushNow();
+  const state = client.getState();
+  assert.ok(state.notices.some((n) => n.kind === "conflict"), "conflict surfaced");
+  assert.equal(state.notices.filter((n) => n.kind === "conflict").length, 1, "one conflict at most");
+  assert.equal(state.notices.some((n) => n.kind === "error"), false, "the conflict replaced the error");
   client.dispose();
 });
 
@@ -554,8 +585,8 @@ test("STORE_RECOVERY_REQUIRED refetches recovery state without retrying PATCH", 
   assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "recovery" });
   assert.equal(patchCount, 1);
   assert.equal(client.getState().mode, "recovery");
-  assert.equal(client.getState().lastFlushCode, null);
-  assert.equal(client.getState().lastFlushError, null);
+  assert.equal(client.getState().notices.some((n) => n.kind === "conflict"), false);
+  assert.equal(client.getState().notices.some((n) => n.kind === "error"), false);
   client.dispose();
 });
 
@@ -577,8 +608,8 @@ test("STORE_RECOVERY_REQUIRED surfaces its error when recovery refetch fails", a
     errorMessage: "recover first",
   });
   assert.equal(patchCount, 1);
-  assert.equal(client.getState().lastFlushCode, null);
-  assert.equal(client.getState().lastFlushError, "recover first");
+  assert.equal(client.getState().notices.some((n) => n.kind === "conflict"), false);
+  assert.equal(client.getState().notices.find((n) => n.kind === "error")?.message, "recover first");
   client.dispose();
 });
 
@@ -596,8 +627,8 @@ test("unknown 409 codes fail loudly without retry", async () => {
   client.preview("meirenzhi", "panelOpacity", 3);
   assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "error", errorMessage: "boom" });
   assert.equal(patchCount, 1);
-  assert.equal(client.getState().lastFlushCode, null);
-  assert.equal(client.getState().lastFlushError, "boom");
+  assert.equal(client.getState().notices.some((n) => n.kind === "conflict"), false);
+  assert.equal(client.getState().notices.find((n) => n.kind === "error")?.message, "boom");
   client.dispose();
 });
 
@@ -624,8 +655,8 @@ test("queued flush failures overwrite conflict state without breaking failure-fi
   releaseFirstPatch();
   assert.deepEqual(await firstFlush, { flushed: 0, blocked: "conflict" });
   assert.deepEqual(await secondFlush, { flushed: 0, blocked: "error", errorMessage: "HTTP 500" });
-  assert.equal(client.getState().lastFlushCode, null);
-  assert.equal(client.getState().lastFlushError, "HTTP 500");
+  assert.equal(client.getState().notices.some((n) => n.kind === "conflict"), false);
+  assert.equal(client.getState().notices.find((n) => n.kind === "error")?.message, "HTTP 500");
   client.dispose();
 });
 
@@ -645,8 +676,8 @@ test("revision-conflict refetch failure does not send a blind retry", async () =
   assert.equal(patchCount, 1);
   assert.equal(client.getState().status, "offline-failed");
   assert.equal(client.getState().dirtyCount, 1);
-  assert.equal(client.getState().lastFlushCode, null);
-  assert.equal(client.getState().lastFlushError, null);
+  assert.equal(client.getState().notices.some((n) => n.kind === "conflict"), false);
+  assert.equal(client.getState().notices.some((n) => n.kind === "error"), false);
   client.dispose();
 });
 
@@ -665,8 +696,8 @@ test("revision-conflict refetch with the same revision does not retry", async ()
   assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "conflict" });
   assert.equal(patchCount, 1);
   assert.equal(client.getState().dirtyCount, 1);
-  assert.equal(client.getState().lastFlushCode, "REVISION_CONFLICT");
-  assert.equal(client.getState().lastFlushError, null);
+  assert.ok(client.getState().notices.some((n) => n.kind === "conflict"));
+  assert.equal(client.getState().notices.some((n) => n.kind === "error"), false);
   client.dispose();
 });
 
@@ -687,7 +718,7 @@ test("auto-save: the debounce window merges into ONE PATCH (ADR-0003)", async ()
   client.dispose();
 });
 
-test("lastFlushError: a failed auto-save surfaces, the next edit clears it (ADR-0003)", async () => {
+test("error notice: a failed auto-save surfaces, the next edit clears it (ADR-0003)", async () => {
   const fetchImpl = makeFetch((index, url, init) => {
     if (init.method === "PATCH") return jsonResponse(400, { error: "meirenzhi.panelOpacity 校验失败（BAD_VALUE）" });
     return snapshotBody();
@@ -696,9 +727,9 @@ test("lastFlushError: a failed auto-save surfaces, the next edit clears it (ADR-
   await client.boot();
   client.preview("meirenzhi", "panelOpacity",9);
   await new Promise((resolve) => setTimeout(resolve, 520));
-  assert.equal(client.getState().lastFlushError, "meirenzhi.panelOpacity 校验失败（BAD_VALUE）", "failure surfaced for the panel strip");
+  assert.equal(client.getState().notices.find((n) => n.kind === "error")?.message, "meirenzhi.panelOpacity 校验失败（BAD_VALUE）", "failure surfaced for the panel strip");
   client.preview("meirenzhi", "panelOpacity",10); // a fresh edit always clears the strip
-  assert.equal(client.getState().lastFlushError, null);
+  assert.equal(client.getState().notices.some((n) => n.kind === "error"), false);
   client.dispose();
 });
 
@@ -1142,9 +1173,9 @@ test("flush: dangling-only issues excise the poison by name and auto re-flush he
   const result = await client.flushNow();
   assert.deepEqual(result, { flushed: 0, blocked: null, selfHealed: true },
     "a dangling-only batch is self-healed, not blocked");
-  assert.deepEqual(client.getState().revertedFields,
+  assert.deepEqual((client.getState().notices.find((n) => n.kind === "reverted")?.fields ?? []),
     [{ skinId: "openbmc", key: "wallpaper" }], "the poison is named, not silenced");
-  assert.equal(client.getState().lastFlushError, null, "dangling-only: no generic failure strip");
+  assert.equal(client.getState().notices.some((n) => n.kind === "error"), false, "dangling-only: no generic failure strip");
   // The continuation runs on the write chain right after this task — give it
   // a turn before asserting its effects.
   await new Promise((resolve) => setTimeout(resolve, 25));
@@ -1154,7 +1185,7 @@ test("flush: dangling-only issues excise the poison by name and auto re-flush he
     "only the surviving preview was re-sent");
   const state = client.getState();
   assert.equal(state.dirtyCount, 0, "the survivor flushed clean");
-  assert.deepEqual(state.revertedFields, [], "a healthy flush retires the notice");
+  assert.deepEqual((state.notices.find((n) => n.kind === "reverted")?.fields ?? []), [], "a healthy flush retires the notice");
   client.dispose();
 });
 
@@ -1181,8 +1212,8 @@ test("flush: mixed issues excise the dangling preview and name the rest", async 
   await client.flushNow();
   await new Promise((resolve) => setTimeout(resolve, 25));
   const state = client.getState();
-  assert.deepEqual(state.revertedFields, [{ skinId: "openbmc", key: "wallpaper" }]);
-  assert.equal(state.lastFlushError, "校验失败", "named error for the non-dangling issue");
+  assert.deepEqual((state.notices.find((n) => n.kind === "reverted")?.fields ?? []), [{ skinId: "openbmc", key: "wallpaper" }]);
+  assert.equal(state.notices.find((n) => n.kind === "error")?.message, "校验失败", "named error for the non-dangling issue");
   assert.equal(state.dirtyCount, 1, "the BAD_VALUE preview stays dirty for retry");
   client.dispose();
 });
@@ -1205,8 +1236,8 @@ test("flush: a dangling-coded issue with a malformed payload stays a named error
   const result = await client.flushNow();
   assert.deepEqual(result, { flushed: 0, blocked: "error", errorMessage: "校验失败" });
   const state = client.getState();
-  assert.deepEqual(state.revertedFields, [], "nothing named → nothing excised");
-  assert.equal(state.lastFlushError, "校验失败", "the strip survives");
+  assert.deepEqual((state.notices.find((n) => n.kind === "reverted")?.fields ?? []), [], "nothing named → nothing excised");
+  assert.equal(state.notices.find((n) => n.kind === "error")?.message, "校验失败", "the strip survives");
   assert.equal(state.dirtyCount, 1, "the preview stays dirty for retry");
   client.dispose();
 });

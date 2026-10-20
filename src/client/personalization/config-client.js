@@ -23,8 +23,8 @@
  *     STORE_READONLY downgrades to read-only with no refetch;
  *   - writes emit `dsh-skins:config-changed` + a BroadcastChannel ping so
  *     other tabs refetch; window focus refetch is the fallback path;
- *   - retry exhaustion or an unchanged normal refetch lands in lastFlushCode;
- *     ordinary failures land in the mutually exclusive lastFlushError;
+ *   - retry exhaustion or an unchanged normal refetch lands in the conflict
+ *     notice; ordinary failures land in the kind-exclusive error notice;
  *   - every applied snapshot emits to local subscribers — including
  *     same-status refetches, whose silent swaps previously starved the UI.
  */
@@ -61,14 +61,28 @@ export function createConfigClient(options = {}) {
   let fetchGeneration = 0;
   let disposed = false;
   let writeChain = Promise.resolve();
-  let lastFlushCode = null;
-  let lastFlushError = null;
-  let revertedFields = []; // [{skinId, key}] — dangling previews excised by name (ADR-0015)
+  // Flush notices: at most one per kind; conflict/error are kind-exclusive
+  // (a conflict replaces the error); error and reverted legally coexist — a
+  // partial-dangling batch excises AND names the survivor's failure.
+  let notices = [];
   let channel = null;
 
+  /** Replace the conflict/error notices (the kind-exclusive pair); the
+   * reverted notice is untouched — only a healthy flush retires it. */
   function setFlushFailure(code, message) {
-    lastFlushCode = code;
-    lastFlushError = message;
+    notices = notices.filter((notice) => notice.kind === "reverted");
+    if (code === "REVISION_CONFLICT") notices.push({ kind: "conflict" });
+    else if (message !== null) notices.push({ kind: "error", message });
+  }
+
+  /** Name one excised dangling field on the reverted notice (dedup by field). */
+  function noteReverted(entry) {
+    const current = notices.find((notice) => notice.kind === "reverted");
+    if (current !== undefined && current.fields.some((field) => field.skinId === entry.skinId && field.key === entry.key)) return;
+    notices = [
+      ...notices.filter((notice) => notice.kind !== "reverted"),
+      { kind: "reverted", fields: [...(current?.fields ?? []), entry] },
+    ];
   }
 
   // -- plumbing --------------------------------------------------------------
@@ -89,9 +103,7 @@ export function createConfigClient(options = {}) {
       references: snapshot.references ?? {},
       recovery: snapshot.recovery,
       quota: snapshot.quota,
-      lastFlushCode,
-      lastFlushError,
-      revertedFields: revertedFields.map((entry) => ({ ...entry })),
+      notices: structuredClone(notices),
       dirtyCount: previews.size,
     };
   }
@@ -283,7 +295,7 @@ export function createConfigClient(options = {}) {
             const errorMessage = errorBody?.error ?? `HTTP ${response.status}`;
             // ADR-0015: a 400 with structured params.issues lets the client
             // NAME the poison. Dangling references (MISSING_ASSET / BAD_ASSET)
-            // are excised and reported as revertedFields instead of staying
+            // are excised and reported on the reverted notice instead of staying
             // dirty forever and blocking every later auto-save; every other
             // issue keeps its previews dirty and surfaces the named error.
             const issues = Array.isArray(errorBody?.params?.issues) ? errorBody.params.issues : null;
@@ -301,10 +313,7 @@ export function createConfigClient(options = {}) {
                   if (previews.has(composite)) {
                     previews.delete(composite);
                     excised = true;
-                    const alreadyNoted = revertedFields.some(
-                      (entry) => entry.skinId === issue.skinId && entry.key === issue.key,
-                    );
-                    if (!alreadyNoted) revertedFields.push({ skinId: issue.skinId, key: issue.key });
+                    noteReverted({ skinId: issue.skinId, key: issue.key });
                   }
                 }
               }
@@ -331,7 +340,7 @@ export function createConfigClient(options = {}) {
             if (previews.get(composite) === value) previews.delete(composite);
           }
           setFlushFailure(null, null);
-          revertedFields = []; // a healthy flush retires any earlier dangling notice
+          notices = []; // a healthy flush retires every notice (conflict, error, reverted)
           // Resync from the Host rather than trusting a racing local snapshot:
           // a refetch issued mid-flight may otherwise resurrect pre-write state.
           await refetch();

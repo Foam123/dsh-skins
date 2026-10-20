@@ -7,8 +7,8 @@
  * Interaction model (ADR-0003, v2.5 auto-save):
  *   - edits call configClient.preview/previewReset → local live projection
  *     plus a debounced auto-flush; the user never saves anything;
- *   - lastFlushError (from the client) renders the 保存失败 warning strip;
- *     the next edit clears it;
+ *   - the client's error/conflict notices render the 保存失败 warning strip;
+ *     the next edit clears them;
  *   - 恢复默认 resets every field to factory defaults and flushes at once;
  *   - the wallpaper section merges built-in choices and the user library in
  *     one grid; library add/remove is immediate (asset path, like all writes);
@@ -549,29 +549,33 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
         jsx("span", { children: tr("personalization.status.unsupported") }),
       ] }));
     }
-    // Auto-save failure strips (ADR-0003): exhausted revision conflicts use
-    // lastFlushCode; ordinary server failures use lastFlushError. The next
-    // edit clears both fields.
-    if (state.lastFlushCode === "REVISION_CONFLICT") {
+    // Auto-save failure notices (ADR-0003): exhausted revision conflicts use
+    // the conflict notice; ordinary server failures use the error notice
+    // (kind-exclusive). The next edit clears both kinds.
+    const notices = state.notices;
+    const conflictNotice = notices.find((notice) => notice.kind === "conflict");
+    const errorNotice = notices.find((notice) => notice.kind === "error");
+    if (conflictNotice !== undefined) {
       statusCluster.push(jsx("div", { key: "save-conflict", className: "dsh-skins-pz-status dsh-skins-pz-warn", children: [
         jsx("span", { children: tr("personalization.saveConflict") }),
       ] }));
-    } else if (state.lastFlushError) {
+    } else if (errorNotice !== undefined) {
       statusCluster.push(jsx("div", { key: "save-error", className: "dsh-skins-pz-status dsh-skins-pz-warn", children: [
         jsx("span", { children: tr("personalization.saveFailed") }),
-        jsx("div", { className: "dsh-skins-pz-muted", children: state.lastFlushError }),
+        jsx("div", { className: "dsh-skins-pz-muted", children: errorNotice.message }),
       ] }));
     }
     // Dangling-preview reversions (ADR-0015): the client excised a preview
     // whose asset was deleted elsewhere and reset the field to factory — the
     // notice NAMES what fell back instead of leaving a silent change. Reuses
     // the transient footer strip slot and existing classes (zero new CSS).
-    if (Array.isArray(state.revertedFields) && state.revertedFields.length > 0) {
+    const revertedNotice = notices.find((notice) => notice.kind === "reverted");
+    if (revertedNotice !== undefined && revertedNotice.fields.length > 0) {
       statusCluster.push(jsx("div", { key: "reverted", className: "dsh-skins-pz-status", children: [
         jsx("div", { children: tr("personalization.fieldReverted") }),
         jsx("div", {
           className: "dsh-skins-pz-muted",
-          children: state.revertedFields.map((entry) => `${labelFor(entry.skinId)} · ${entry.key}`).join("、"),
+          children: revertedNotice.fields.map((entry) => `${labelFor(entry.skinId)} · ${entry.key}`).join("、"),
         }),
       ] }));
     }

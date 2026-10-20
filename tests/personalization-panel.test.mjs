@@ -5,7 +5,7 @@
  * preview locally and the client debounces the flush, 恢复默认 resets and
  * flushes at once, the wallpaper section merges builtin + library with
  * clear-library confirmation, and the footer action bar carries the status
- * cluster (offline/retry/lastFlushError).
+ * cluster (offline/refetch/error notice).
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -28,6 +28,7 @@ function makeConfigClient(overrides = {}) {
     library: [],
     references: {},
     dirtyCount: 0,
+    notices: [],
     ...overrides,
   };
   // Preview layer, mirroring the real client's effectiveOverrides(skinId):
@@ -50,8 +51,8 @@ function makeConfigClient(overrides = {}) {
       }
       return section;
     },
-    preview: (skinId, key, value) => { calls.preview.push({ skinId, key, value }); previews.set(`${skinId} ${key}`, value); state = { ...state, dirtyCount: previews.size, lastFlushError: null }; emit(); },
-    previewReset: (skinId, key) => { calls.previewReset.push({ skinId, key }); previews.set(`${skinId} ${key}`, null); state = { ...state, dirtyCount: previews.size, lastFlushError: null }; emit(); },
+    preview: (skinId, key, value) => { calls.preview.push({ skinId, key, value }); previews.set(`${skinId} ${key}`, value); state = { ...state, dirtyCount: previews.size, notices: state.notices.filter((n) => n.kind === "reverted") }; emit(); },
+    previewReset: (skinId, key) => { calls.previewReset.push({ skinId, key }); previews.set(`${skinId} ${key}`, null); state = { ...state, dirtyCount: previews.size, notices: state.notices.filter((n) => n.kind === "reverted") }; emit(); },
     dirtyFields: () => [...previews.entries()]
       .filter(([, value]) => value !== null)
       .map(([composite, value]) => { const [skinId, key] = composite.split(" "); return { skinId, key, value }; }),
@@ -533,8 +534,7 @@ test("single delete: busy in flight, outcome always surfaced, retry after failur
 test("revision conflict renders its dedicated warning instead of the generic save failure", async () => {
   const config = makeConfigClient({
     status: "synced",
-    lastFlushCode: "REVISION_CONFLICT",
-    lastFlushError: "stale generic reason",
+    notices: [{ kind: "error", message: "stale generic reason" }, { kind: "conflict" }],
   });
   const panel = mountPanel({ skinId: "meirenzhi", status: "synced", config });
   await tick();
@@ -547,8 +547,7 @@ test("revision conflict renders its dedicated warning instead of the generic sav
 test("generic save failure renders only when no conflict code is present", async () => {
   const config = makeConfigClient({
     status: "synced",
-    lastFlushCode: null,
-    lastFlushError: "boom",
+    notices: [{ kind: "error", message: "boom" }],
   });
   const panel = mountPanel({ skinId: "meirenzhi", status: "synced", config });
   await tick();
@@ -558,13 +557,13 @@ test("generic save failure renders only when no conflict code is present", async
   assert.equal(texts.includes("personalization.saveConflict"), false);
 });
 
-test("auto-save failure strip renders from lastFlushError and clears on edit (ADR-0003)", async () => {
+test("auto-save failure strip renders from the error notice and clears on edit (ADR-0003)", async () => {
   const config = makeConfigClient({ status: "synced" });
   const panel = mountPanel({ skinId: "meirenzhi", status: "synced", config });
   await tick();
   assert.equal(textsOf(panel.tree()).includes("personalization.saveFailed"), false, "clean panel shows no failure strip");
 
-  config.setState({ lastFlushError: "meirenzhi.panelOpacity 校验失败（BAD_VALUE）" });
+  config.setState({ notices: [{ kind: "error", message: "meirenzhi.panelOpacity 校验失败（BAD_VALUE）" }] });
   await tick();
   assert.ok(textsOf(panel.tree()).includes("personalization.saveFailed"), "failure strip renders");
   assert.ok(textsOf(panel.tree()).some((t) => typeof t === "string" && t.includes("BAD_VALUE")), "the server's reason is surfaced");
@@ -813,7 +812,7 @@ test("PANEL_CSS owns the panel visual interface", () => {
 
 test("dangling-preview reversions render a named notice strip (ADR-0015)", async () => {
   const config = makeConfigClient({
-    revertedFields: [{ skinId: "openbmc", key: "wallpaper" }],
+    notices: [{ kind: "reverted", fields: [{ skinId: "openbmc", key: "wallpaper" }] }],
   });
   const panel = mountPanel({ skinId: "meirenzhi", config });
   await tick();
@@ -822,7 +821,7 @@ test("dangling-preview reversions render a named notice strip (ADR-0015)", async
   assert.ok(texts.some((value) => typeof value === "string" && value.includes("openbmc · wallpaper")),
     "the fallen-back field is named");
 
-  const clean = makeConfigClient({ revertedFields: [] });
+  const clean = makeConfigClient({ notices: [] });
   const cleanPanel = mountPanel({ skinId: "meirenzhi", config: clean });
   await tick();
   assert.ok(!textsOf(cleanPanel.tree()).includes("personalization.fieldReverted"),

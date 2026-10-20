@@ -46,7 +46,7 @@ function makeDom(viewportHeight = 900, viewportWidth = 1400) {
 function makeConfigClient() {
   const listeners = new Set();
   const previews = new Map();
-  let state = { status: "synced", revision: 7, mode: "normal", skins: {}, library: [], references: {}, dirtyCount: 0 };
+  let state = { status: "synced", revision: 7, mode: "normal", skins: {}, library: [], references: {}, dirtyCount: 0, notices: [] };
   const calls = { flushNow: 0, restore: 0 };
   const emit = () => { for (const l of [...listeners]) l(state); };
   return {
