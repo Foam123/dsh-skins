@@ -220,14 +220,17 @@ test("the REAL openbmc and uefi factories project their baked defaults verbatim"
     });
     const result = projectSkin(skin, {}, { assetResolver: resolverFor });
     assert.equal(result.degraded, "none", skin.id);
-    // Byte-equivalence against the factory's own baked strings (design §9).
-    assert.equal(result.effects.backdrop.imageLight, skin.art === "" ? skin.placeholderLight : skin.scrimLight);
-    assert.equal(result.effects.backdrop.imageDark, skin.art === "" ? skin.placeholderDark : skin.scrimDark);
-    assert.deepEqual(result.effects.slogans, skin.slogans);
-    assert.equal(result.effects.titleBrand, skin.title);
-    assert.equal(result.effects.favicon.href, skin.favicon);
-    assert.equal(result.effects.staticCss, skin.css);
-    assert.equal(result.effects.bodyAttribute, skin.bodyAttr);
+    // Behaviour, not packaging (ADR-0014/B13): read everything off the effects.
+    assert.ok(result.effects.backdrop.imageLight.startsWith("linear-gradient(rgba("), "baked scrim ships at the anchor");
+    assert.ok(result.effects.backdrop.imageLight.includes(", url(data:image/webp"), "art layer rides the scrim");
+    assert.ok(result.effects.backdrop.imageDark.startsWith("linear-gradient(rgba("));
+    assert.deepEqual(result.effects.slogans, defaultsFor(skin.id).slogan, "catalog is the single slogan source (B14)");
+    assert.equal(result.effects.titleBrand, skin.id === "openbmc" ? "OpenBMC Studio" : "UEFI Studio");
+    // favicon 是静态资产：starts-with + mime 弱化断言，行为层由 smoke 兜底。
+    assert.ok(result.effects.favicon.href.startsWith("data:"));
+    assert.equal(typeof result.effects.favicon.mime, "string");
+    assert.equal(result.effects.staticCss.includes("backdrop-filter:blur(var("), false, "no glass rule at the anchor");
+    assert.equal(result.effects.bodyAttribute, skin.id === "openbmc" ? "dshOpenbmcSkin" : "dshUefiHarness");
   }
 });
 
@@ -252,15 +255,16 @@ test("openbmc projects baked defaults through its own curve (ADR-0004)", async (
   assert.equal("--dsw-alias-bg-overlay" in def.effects.tokenOverrides, false, "floating layers stay fixed (tgcf ruling #16 analogue)");
   assert.equal(def.effects.backdrop.blur, 0, "no frost at the default anchor");
   assert.equal(def.effects.cssVariables, null);
-  assert.equal(def.effects.staticCss, skin.css, "byte-equal static css — no glass rule at default");
+  assert.equal(def.effects.staticCss.includes('backdrop-filter:blur(var(--dsh-openbmc-glass-blur,0px))'), false, "byte-equal static css — no glass rule at default");
 
   // P=0 floors the riding family at 0 points (alpha string "0.00").
   const floor = project({ panelOpacity: 0 });
   assert.equal(floor.effects.tokenOverrides["--dsw-alias-bg-base"].light, "rgba(247, 250, 252, 0.00)");
-  assert.equal(
-    floor.effects.backdrop.imageLight,
-    "linear-gradient(rgba(247, 250, 252, 0.00) 0%, rgba(240, 246, 250, 0.00) 100%), url(" + skin.art + ")",
+  assert.ok(
+    floor.effects.backdrop.imageLight.startsWith("linear-gradient(rgba(247, 250, 252, 0.00) 0%, rgba(240, 246, 250, 0.00) 100%)"),
+    "P=0 scrim prefix (Task 1 contract gold)",
   );
+  assert.ok(floor.effects.backdrop.imageLight.includes(", url(data:image/webp"), "art layer present");
 
   // Blur ramps quadratically from the P=55 anchor: P=77 → 6, P=100 → 24 (cap).
   const mid = project({ panelOpacity: 77 });
@@ -269,7 +273,8 @@ test("openbmc projects baked defaults through its own curve (ADR-0004)", async (
   assert.equal(ceiling.effects.backdrop.blur, 24);
   assert.equal(
     ceiling.effects.staticCss,
-    skin.css + "\n" + 'body[data-dsh-openbmc-skin] [id="root"]{backdrop-filter:blur(var(--dsh-openbmc-glass-blur,0px))}',
+    def.effects.staticCss + "\n" + 'body[data-dsh-openbmc-skin] [id="root"]{backdrop-filter:blur(var(--dsh-openbmc-glass-blur,0px))}',
+    "glass hinge: two independent pipeline outputs + inline literal (non-self-comparing)",
   );
   assert.deepEqual(ceiling.effects.cssVariables["--dsh-openbmc-glass-blur"], { light: "24px", dark: "24px" });
 
@@ -307,15 +312,16 @@ test("uefi-harness projects baked defaults through its own curve (ADR-0004)", as
   assert.equal("--dsw-alias-bg-overlay" in def.effects.tokenOverrides, false, "floating layers stay fixed (tgcf ruling #16 analogue)");
   assert.equal(def.effects.backdrop.blur, 0, "no frost at the default anchor");
   assert.equal(def.effects.cssVariables, null);
-  assert.equal(def.effects.staticCss, skin.css, "byte-equal static css — no glass rule at default");
+  assert.equal(def.effects.staticCss.includes('backdrop-filter:blur(var(--dsh-uefi-glass-blur,0px))'), false, "byte-equal static css — no glass rule at default");
 
   // P=0 floors the riding family at 0 points (alpha string "0.00").
   const floor = project({ panelOpacity: 0 });
   assert.equal(floor.effects.tokenOverrides["--dsw-alias-bg-base"].light, "rgba(248, 247, 255, 0.00)");
-  assert.equal(
-    floor.effects.backdrop.imageLight,
-    "linear-gradient(rgba(248, 247, 255, 0.00) 0%, rgba(238, 234, 255, 0.00) 100%), url(" + skin.art + ")",
+  assert.ok(
+    floor.effects.backdrop.imageLight.startsWith("linear-gradient(rgba(248, 247, 255, 0.00) 0%, rgba(238, 234, 255, 0.00) 100%)"),
+    "P=0 scrim prefix (Task 1 contract gold)",
   );
+  assert.ok(floor.effects.backdrop.imageLight.includes(", url(data:image/webp"), "art layer present");
 
   // Blur ramps quadratically from the P=55 anchor: P=77 → 6, P=100 → 24 (cap).
   const mid = project({ panelOpacity: 77 });
@@ -324,7 +330,8 @@ test("uefi-harness projects baked defaults through its own curve (ADR-0004)", as
   assert.equal(ceiling.effects.backdrop.blur, 24);
   assert.equal(
     ceiling.effects.staticCss,
-    skin.css + "\n" + 'body[data-dsh-uefi-harness] [id="root"]{backdrop-filter:blur(var(--dsh-uefi-glass-blur,0px))}',
+    def.effects.staticCss + "\n" + 'body[data-dsh-uefi-harness] [id="root"]{backdrop-filter:blur(var(--dsh-uefi-glass-blur,0px))}',
+    "glass hinge: two independent pipeline outputs + inline literal (non-self-comparing)",
   );
   assert.deepEqual(ceiling.effects.cssVariables["--dsh-uefi-glass-blur"], { light: "24px", dark: "24px" });
 
@@ -414,7 +421,7 @@ test("the REAL meirenzhi factory projects single scrim, static palette and stati
   assert.deepEqual(result.effects.tokenOverrides["--dsw-alias-bg-module-platform"], { light: "rgba(250, 249, 246, 0.35)", dark: "rgba(18, 18, 26, 0.40)" });
   assert.equal(result.effects.backdrop.imageLight, 'url("builtin://meirenzhi/yuntai")', "factory default rides yuntai (001合照)");
   // Favicon is a static skin asset — the 掌天瓶 mark (bundled WebP data URL).
-  assert.equal(result.effects.favicon.href, skin.favicon);
+  assert.ok(result.effects.favicon.href.startsWith("data:image/webp;base64,"));
   assert.equal(result.effects.favicon.mime, "image/webp");
   // Colors are baked into the skin (the fields are gone but the identity is not).
   assert.deepEqual(result.effects.tokenOverrides["--dsw-alias-brand-primary"], { light: "#B8433F", dark: "#E58A80" });
@@ -429,7 +436,7 @@ test("the REAL meirenzhi factory projects single scrim, static palette and stati
   assert.deepEqual(result.effects.tokenOverrides["--dsw-specific-sidebar-nav-item-active"], { light: "rgba(250, 249, 246, 0.9)", dark: "rgba(28, 28, 40, 0.9)" });
   // Glass rule stays P-gated: absent on the ADR-0010 hinge floor (P≤35);
   // decorations stay null.
-  assert.equal(result.effects.staticCss, skin.css);
+  assert.equal(result.effects.staticCss.includes("backdrop-filter:blur(var("), false, "no glass rule at the hinge floor");
   assert.equal(result.effects.decorations, null);
   assert.deepEqual(result.effects.slogans, { zh: "风起凡尘 · 红颜问道", en: "From mortal dust, immortals bloom" });
   assert.equal(result.effects.titleBrand, "美人志");

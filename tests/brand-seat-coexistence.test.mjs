@@ -80,13 +80,6 @@ function installDom() {
 
 const stubJsx = { jsx: () => null };
 
-function withLegacyAssets(skin) {
-  if (skin.builtinAssets === undefined) {
-    skin.builtinAssets = { art: { mime: "image/webp", url: skin.art !== "" ? skin.art : skin.placeholderLight } };
-  }
-  return skin;
-}
-
 function personalizationFor(skinsById) {
   return {
     getOverrides: () => ({}),
@@ -132,7 +125,7 @@ function makeLedgerSlots() {
 
 function bootRuntime(ctx) {
   const runtime = createSkinRuntime();
-  const openbmc = withLegacyAssets(createOpenBmcHarness(stubJsx));
+  const openbmc = createOpenBmcHarness(stubJsx); // 工厂自带 builtinAssets（ADR-0014/B15），无需合成补底
   runtime.register(openbmc);
   runtime.setPersonalization(personalizationFor(new Map([["openbmc", openbmc]])));
   const dispose = runtime.apply(ctx); // apply() mounts order[0]

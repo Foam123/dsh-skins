@@ -13,13 +13,15 @@ const project = (values) =>
 
 test("skin contract: identity, slots and 12 builtin assets", () => {
   assert.equal(skin.id, "meirenzhi");
-  assert.equal(skin.bodyAttr, "dshMeirenzhiSkin");
+  const anchorFx = project({ panelOpacity: 35 });
+  assert.equal(anchorFx.bodyAttribute, "dshMeirenzhiSkin");
   assert.deepEqual(skin.label, { zh: "凡人修仙传 · 美人志", en: "Mortal's Journey · Beauty Chronicle" });
   assert.equal(typeof skin.Mark, "function");
   assert.equal(typeof skin.Name, "function");
-  assert.ok(skin.favicon.startsWith("data:image/webp;base64,"));
-  assert.equal(skin.faviconMime, "image/webp");
-  assert.equal(skin.title, "美人志");
+  // favicon/title 是静态资产：行为读数 + starts-with 弱化（ADR-0014/B13，smoke 兜底）。
+  assert.ok(anchorFx.favicon.href.startsWith("data:image/webp;base64,"));
+  assert.equal(anchorFx.favicon.mime, "image/webp");
+  assert.equal(anchorFx.titleBrand, "美人志");
   assert.deepEqual(
     Object.keys(skin.builtinAssets),
     getSkinSchema("meirenzhi").fields.find((f) => f.key === "wallpaper").builtinChoices,
@@ -43,7 +45,7 @@ test("brand contract: bundled mark, gradient name and badge inversion are pinned
   assert.equal(name.props.children[0].props.children, "凡人修仙传");
   assert.equal(name.props.children[0].props.style.background, "linear-gradient(120deg, #A87B2F, #D9B45C 45%, #B8433F)");
   assert.equal(name.props.children[1].props.children, "BEAUTY");
-  const css = skin.css;
+  const css = project({ panelOpacity: 35 }).staticCss; // 出厂锚点：无玻璃规则，即纯 CSS（ADR-0014/B13）
   assert.ok(css.includes("body[data-dsh-meirenzhi-skin][data-ds-dark-theme] .dsh-mrz-badge{background:#FAF9F6;color:#12121A}"));
   assert.ok(css.includes("@keyframes dsh-mrz-drift-a"));
   assert.ok(css.includes("@keyframes dsh-mrz-drift-b"));

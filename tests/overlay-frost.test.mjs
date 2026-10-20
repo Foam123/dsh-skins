@@ -14,10 +14,15 @@ import { createMeirenzhiSkin } from "../src/client/skins/meirenzhi/index.js";
 import { createUefiHarness } from "../src/client/skins/uefi-harness/index.js";
 
 const jsx = (component, props) => ({ component, props });
+// ADR-0014/B13：不读工厂包装字段（.css），改读出厂锚点投影输出的
+// staticCss（锚点 blur=0，即纯 CSS；frost 段无条件在内）。
+const anchorCss = (factory, anchor, assets = null) => factory({ jsx })
+  .project({ panelOpacity: anchor, slogan: { zh: "测", en: "t" } }, assets)
+  .staticCss.replaceAll(/\s+/g, "");
 const skins = [
-  { id: "openbmc", css: createOpenBmcHarness({ jsx }).css.replaceAll(/\s+/g, "") },
-  { id: "meirenzhi", css: createMeirenzhiSkin({ jsx }).css.replaceAll(/\s+/g, "") },
-  { id: "uefi", css: createUefiHarness({ jsx }).css.replaceAll(/\s+/g, "") },
+  { id: "openbmc", css: anchorCss(createOpenBmcHarness, 55) },
+  { id: "meirenzhi", css: anchorCss(createMeirenzhiSkin, 35, { wallpaper: { url: "data:image/webp;base64,AAAA" } }) },
+  { id: "uefi", css: anchorCss(createUefiHarness, 55) },
 ];
 
 // Per-skin tint data, merged from the former four per-skin tables into one
