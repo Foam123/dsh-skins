@@ -188,3 +188,10 @@
 
 - `pnpm run check` 全绿（含 `upstream-hooks: VERIFIED` 或本机降级 SKIPPED）。
 - ADR-0015 验收五件全数落地：① delete 前置条件冲突 → 409 → refetch 重试（Task 2 服务端 + Task 4 客户端 + Task 6 跨缝三层）② 跨缝悬空自愈（Task 6）③ 清空图库单次提交原子（Task 2，含 3b 组合用例）④ 混版宽容（Task 1 围栏 + Task 3）⑤ 两捎带项（Task 4/6）。
+
+## 收尾记录（2026-10-20）
+
+- Task 1–7 全部完成。Task 7 Step 2/4 由主人裁定当日执行，版本定为 **1.5.12**（计划原建议 1.6.0 作废——主人指示走 1.5.x 补丁线；1.5.11 已被 ADR-0013 批次占用，npm 不可重发）。发版 commit `97ab0c5`、tag `v1.5.12`；staged 窗口 14 轮（约 28 分钟）消散，三键核验通过、`dist-tags.latest` 推进。
+- 评审三部曲全部闭环：计划评审 3 轮 11 项、实现评审 3 轮 9 项、视觉评审 2 轮 6 项（真 DOM 截图证据；Desktop `<dialog>` 面声明静态审阅覆盖）——全部「已修复并复核通过」「反驳成立」或「观察备案」，无待主人决策分歧。
+- 评审修复链：`d44f766`（终态不变量 + 重复删除守卫）、`a0726d1`（400 分支补钉 + selfHealed）、`c128abe`（清空确认预览引用）、`4d04d91`（验收②断言对齐）、`417146e`（issues 形状文档）、`1ceda18`（产物重建）、`4729424`（清空文案/locale 中立/摘除绑定）、`1e08a31`（产物重建）。
+- 终态门禁：`pnpm run check` 330/330 全绿 + upstream-hooks VERIFIED strict-mode；六套件 167/167；lib 与 src 零漂移；本机 web profile 已升级 1.5.12 并重启生效。
