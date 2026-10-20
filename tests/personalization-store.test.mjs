@@ -747,3 +747,175 @@ test("N3: shape-changed future states serve a usable read-only snapshot", () => 
   // The read-only asset route degrades to 404 semantics, never a TypeError.
   assert.equal(store.serveAsset("/dsh-skins/assets/u_0123456789abcdef0123456789abcdef.png"), null);
 });
+
+// ---- ADR-0015: gallery ops join the revisioned write dialect ----------------
+
+const MISSING_ID = `u_${"0".repeat(32)}`;
+
+test("A15: deleteAsset op participates in the baseRevision precondition", async () => {
+  const store = makeStore(tempDir());
+  const { asset } = await store.uploadAsset(pngBytes(), { displayName: "w" });
+  await assert.rejects(
+    store.applyOperations({
+      baseRevision: 0, // stale: the upload already bumped it to 1
+      operations: [{ op: "deleteAsset", assetId: asset.id }],
+    }),
+    (e) => e.code === "REVISION_CONFLICT",
+  );
+  assert.equal(store.snapshot().library.length, 1, "a stale delete deletes nothing");
+});
+
+test("A15: deleteAsset op on a missing target rejects the whole batch with a named issue", async () => {
+  const store = makeStore(tempDir());
+  await store.uploadAsset(pngBytes(), { displayName: "w" });
+  const revision = store.snapshot().revision;
+  await assert.rejects(
+    store.applyOperations({
+      baseRevision: revision,
+      operations: [
+        { op: "set", skinId: "meirenzhi", key: "slogan", value: { zh: "甲", en: "A" } },
+        { op: "deleteAsset", assetId: MISSING_ID },
+      ],
+    }),
+    (e) => {
+      assert.equal(e.code, "INVALID_CONFIG");
+      assert.deepEqual(e.params.issues, [{ opIndex: 1, assetId: MISSING_ID, code: "ASSET_NOT_FOUND" }]);
+      assert.equal(e.params.code, "ASSET_NOT_FOUND", "params.code retained for old readers");
+      return true;
+    },
+  );
+  const snap = store.snapshot();
+  assert.equal(snap.revision, revision, "zero commits");
+  assert.equal(snap.library.length, 1, "the live asset survives");
+  assert.equal(snap.skins.meirenzhi, undefined, "the sibling field op rolled back with the batch");
+});
+
+test("A15: deleteAsset op with a malformed assetId gets an INVALID_ASSET_ID issue", async () => {
+  const store = makeStore(tempDir());
+  await assert.rejects(
+    store.applyOperations({
+      baseRevision: 0,
+      operations: [{ op: "deleteAsset", assetId: "not-an-id" }],
+    }),
+    (e) => {
+      assert.equal(e.code, "INVALID_CONFIG");
+      assert.deepEqual(e.params.issues, [{ opIndex: 0, assetId: "not-an-id", code: "INVALID_ASSET_ID" }]);
+      return true;
+    },
+  );
+});
+
+test("A15: clearLibrary op commits once, clears references and blobs, and is idempotent", async () => {
+  const dir = tempDir();
+  const store = makeStore(dir);
+  const first = await store.uploadAsset(pngBytes(), { displayName: "a" });
+  await store.uploadAsset(pngBytes(), { displayName: "b" });
+  await setOverride(store, "openbmc", "wallpaper", first.asset.id);
+  const before = store.snapshot().revision;
+
+  const result = await store.applyOperations({
+    baseRevision: before,
+    operations: [{ op: "clearLibrary" }],
+  });
+  assert.equal(result.revision, before + 1, "one commit, one bump");
+  assert.deepEqual(result.affectedSkins, [{ skinId: "openbmc", key: "wallpaper" }]);
+  const snap = store.snapshot();
+  assert.equal(snap.library.length, 0);
+  assert.equal(snap.skins.openbmc, undefined, "the referencing field fell back (no husk)");
+  assert.equal(readdirSync(join(dir, "assets")).filter((f) => !f.startsWith(".")).length, 0, "blobs deleted");
+
+  const again = await store.applyOperations({
+    baseRevision: snap.revision,
+    operations: [{ op: "clearLibrary" }],
+  });
+  assert.equal(again.revision, snap.revision, "empty library → no bump");
+  assert.deepEqual(again.affectedSkins, []);
+});
+
+test("A15: clearLibrary mixed with a failing deleteAsset rejects atomically (acceptance ③)", async () => {
+  const dir = tempDir();
+  const store = makeStore(dir);
+  await store.uploadAsset(pngBytes(), { displayName: "w" });
+  const before = store.snapshot().revision;
+  await assert.rejects(
+    store.applyOperations({
+      baseRevision: before,
+      operations: [{ op: "clearLibrary" }, { op: "deleteAsset", assetId: MISSING_ID }],
+    }),
+    (e) => e.code === "INVALID_CONFIG" && e.params.issues.length === 1,
+  );
+  assert.equal(store.snapshot().revision, before, "zero commits");
+  assert.equal(store.snapshot().library.length, 1, "nothing deleted");
+  assert.equal(readdirSync(join(dir, "assets")).filter((f) => !f.startsWith(".")).length, 1, "blob survives");
+});
+
+test("A15: in-batch ordering — set X then deleteAsset X ends with the field reset", async () => {
+  const store = makeStore(tempDir());
+  const { asset } = await store.uploadAsset(pngBytes(), { displayName: "w" });
+  const result = await store.applyOperations({
+    baseRevision: store.snapshot().revision,
+    operations: [
+      { op: "set", skinId: "openbmc", key: "wallpaper", value: asset.id },
+      { op: "deleteAsset", assetId: asset.id },
+    ],
+  });
+  const snap = store.snapshot();
+  assert.equal(snap.skins.openbmc, undefined, "set applied, then swept by the reference clearing");
+  assert.deepEqual(result.affectedSkins, [{ skinId: "openbmc", key: "wallpaper" }]);
+  assert.equal(snap.library.length, 0);
+});
+
+test("A15: deleteAsset op reports affectedSkins and unlinks the blob", async () => {
+  const dir = tempDir();
+  const store = makeStore(dir);
+  const { asset } = await store.uploadAsset(pngBytes(), { displayName: "w" });
+  await setOverride(store, "meirenzhi", "wallpaper", asset.id);
+  const result = await store.applyOperations({
+    baseRevision: store.snapshot().revision,
+    operations: [{ op: "deleteAsset", assetId: asset.id }],
+  });
+  const snap = store.snapshot();
+  assert.deepEqual(result.affectedSkins, [{ skinId: "meirenzhi", key: "wallpaper" }]);
+  assert.equal(snap.library.length, 0);
+  assert.equal(snap.skins.meirenzhi, undefined);
+  assert.equal(readdirSync(join(dir, "assets")).filter((f) => !f.startsWith(".")).length, 0);
+});
+
+test("A15: field validation failures keep params.code and add params.issues", async () => {
+  const store = makeStore(tempDir());
+  await assert.rejects(
+    store.applyOperations({
+      baseRevision: 0,
+      operations: [{ op: "set", skinId: "meirenzhi", key: "panelOpacity", value: 999 }],
+    }),
+    (e) => {
+      assert.equal(e.code, "INVALID_CONFIG");
+      assert.equal(e.params.code, "BAD_VALUE", "old readers still see the first code");
+      assert.deepEqual(e.params.issues, [
+        { opIndex: 0, skinId: "meirenzhi", key: "panelOpacity", code: "BAD_VALUE" },
+      ]);
+      return true;
+    },
+  );
+});
+
+test("A15: unknown ops are rejected with an INVALID_OP issue (vocabulary whitelist)", async () => {
+  const store = makeStore(tempDir());
+  await assert.rejects(
+    store.applyOperations({
+      baseRevision: 0,
+      operations: [{ op: "nuke" }],
+    }),
+    (e) => {
+      assert.equal(e.code, "INVALID_CONFIG");
+      assert.deepEqual(e.params.issues, [{ opIndex: 0, code: "INVALID_OP" }]);
+      return true;
+    },
+  );
+});
+
+test("A15: pure field batches keep the {revision} response shape", async () => {
+  const store = makeStore(tempDir());
+  const result = await setOverride(store, "meirenzhi", "slogan", { zh: "甲", en: "A" });
+  assert.deepEqual(Object.keys(result), ["revision"]);
+});

@@ -432,13 +432,36 @@ export function createPersonalizationStore(options = {}) {
     return base;
   }
 
-  // -- config operations (field-level ops, design §2/§4) --------------------
+  // -- config operations (unified write dialect, ADR-0015) --------------------
+
+  /**
+   * Shared gallery-delete core (ADR-0015): sweep every skin section for
+   * fields referencing `id`, clear them (recording the fallbacks), prune
+   * emptied sections (load-normalize doctrine: no husks), and drop the
+   * library entry. Returns the removed AssetMeta. Callers own commit/blob.
+   */
+  function applyGalleryDelete(draft, id, affectedSkins) {
+    const meta = draft.library[id];
+    for (const [skinId, section] of Object.entries(draft.skins)) {
+      for (const field of listAssetFields(skinId)) {
+        if (section?.[field.key] === id) {
+          delete section[field.key];
+          affectedSkins.push({ skinId, key: field.key });
+        }
+      }
+      if (Object.keys(section).length === 0) delete draft.skins[skinId];
+    }
+    delete draft.library[id];
+    return meta;
+  }
 
   async function applyOperations({ baseRevision, operations }) {
     init();
     requireNormal("配置写入");
     // Revision, structure, draft, and value validation all run INSIDE the
     // serialized queue so interleaved mutations cannot bypass the precondition.
+    // ADR-0015: the op vocabulary is set | delete | deleteAsset | clearLibrary —
+    // gallery deletes ARE config writes and ride the same precondition.
     return enqueue(() => {
       if (!Number.isInteger(baseRevision) || baseRevision < 0 || baseRevision !== state.revision) {
         throw codedError("REVISION_CONFLICT", "配置已被其他会话修改（修订号过期），请刷新后重试");
@@ -446,36 +469,88 @@ export function createPersonalizationStore(options = {}) {
       if (!Array.isArray(operations) || operations.length === 0 || operations.length > 64) {
         throw codedError("INVALID_CONFIG", "operations 必须是 1–64 个元素的数组");
       }
-      for (const operation of operations) {
+      // Validation pass 1 — structure: every op is checked against the
+      // PRE-BATCH state; verdicts are aggregated (not first-throw) so the
+      // client can name each offending field (ADR-0015 params.issues).
+      const issues = [];
+      for (let index = 0; index < operations.length; index += 1) {
+        const operation = operations[index];
         if (operation === null || typeof operation !== "object") {
-          throw codedError("INVALID_CONFIG", "operation 必须是对象");
+          issues.push({ opIndex: index, code: "INVALID_OP" });
+          continue;
         }
         const { op, skinId, key } = operation;
-        if (op !== "set" && op !== "delete") throw codedError("INVALID_CONFIG", "op 必须是 set 或 delete");
-        if (getField(skinId, key) === null) {
-          throw codedError("INVALID_CONFIG", `未知字段 ${skinId}.${key}`);
+        if (op === "set" || op === "delete") {
+          if (getField(skinId, key) === null) {
+            issues.push({ opIndex: index, skinId, key, code: "UNKNOWN_FIELD" });
+          }
+        } else if (op === "deleteAsset") {
+          const assetId = operation.assetId;
+          if (typeof assetId !== "string" || !ASSET_ID_PATTERN.test(assetId)) {
+            issues.push({ opIndex: index, assetId, code: "INVALID_ASSET_ID" });
+          } else if (state.library[assetId] === undefined) {
+            issues.push({ opIndex: index, assetId, code: "ASSET_NOT_FOUND" });
+          }
+        } else if (op !== "clearLibrary") {
+          issues.push({ opIndex: index, code: "INVALID_OP" });
         }
       }
+      // Validation pass 2 — set values (against the pre-batch library: a set
+      // may legally reference an asset that a LATER deleteAsset in the same
+      // batch removes — application order then resets the field, B3).
       const draft = structuredClone(state);
       const provider = metaProviderFactory(draft.library);
+      for (let index = 0; index < operations.length; index += 1) {
+        const operation = operations[index];
+        if (operation?.op !== "set") continue;
+        const verdict = validateOverride(operation.skinId, operation.key, operation.value, provider);
+        if (!verdict.ok) {
+          issues.push({ opIndex: index, skinId: operation.skinId, key: operation.key, code: verdict.code });
+        }
+      }
+      if (issues.length > 0) {
+        issues.sort((a, b) => a.opIndex - b.opIndex);
+        throw codedError("INVALID_CONFIG", `operations 校验失败（${issues[0].code}）`, {
+          code: issues[0].code, // retained for old readers (ADR-0015 Q&A R1-8)
+          issues,
+        });
+      }
+      // Application pass — array order (B3). Field ops and gallery ops share
+      // one draft, one commit, one revision bump.
+      const affectedSkins = [];
+      const removedAssets = [];
+      let galleryOps = false;
+      const hasFieldOps = operations.some((operation) => operation?.op === "set" || operation?.op === "delete");
       for (const operation of operations) {
         const { op, skinId, key } = operation;
-        if (op === "set") {
-          const verdict = validateOverride(skinId, key, operation.value, provider);
-          if (!verdict.ok) {
-            throw codedError("INVALID_CONFIG", `${skinId}.${key} 校验失败（${verdict.code}）`, { code: verdict.code });
+        if (op === "set" || op === "delete") {
+          draft.skins[skinId] = draft.skins[skinId] ?? {};
+          if (op === "set") draft.skins[skinId][key] = operation.value;
+          else delete draft.skins[skinId][key];
+        } else if (op === "deleteAsset") {
+          galleryOps = true;
+          removedAssets.push(applyGalleryDelete(draft, operation.assetId, affectedSkins));
+        } else if (op === "clearLibrary") {
+          galleryOps = true;
+          for (const id of Object.keys(draft.library)) {
+            removedAssets.push(applyGalleryDelete(draft, id, affectedSkins));
           }
         }
       }
-      for (const { op, skinId, key, value } of operations) {
-        draft.skins[skinId] = draft.skins[skinId] ?? {};
-        if (op === "set") draft.skins[skinId][key] = value;
-        else delete draft.skins[skinId][key];
+      // A gallery-only batch that removed nothing (clearLibrary on an empty
+      // library) is an idempotent no-op: no commit, no revision bump.
+      if (galleryOps && !hasFieldOps && removedAssets.length === 0) {
+        return { revision: state.revision, affectedSkins };
       }
       draft.revision += 1;
       commitState(draft);
+      for (const meta of removedAssets) {
+        try { fs.unlinkSync(blobFileFor(meta.id, meta.extension)); } catch {}
+      }
       gcNow();
-      return { revision: draft.revision };
+      const result = { revision: draft.revision };
+      if (galleryOps) result.affectedSkins = affectedSkins;
+      return result;
     });
   }
 
@@ -582,7 +657,10 @@ export function createPersonalizationStore(options = {}) {
     });
   }
 
-  // -- asset delete (design: always allowed, clear references, report) -------
+  // -- asset delete (compat adapter over the shared core, ADR-0015) -----------
+  // Kept for mixed-version tolerance (an open tab holds the old bundle): no
+  // precondition rides on this route — today's unconditional semantics are
+  // the compatibility floor. New clients use the deleteAsset PATCH op.
 
   async function deleteAsset(id) {
     init();
@@ -591,22 +669,13 @@ export function createPersonalizationStore(options = {}) {
       throw codedError("INVALID_ASSET_ID", "非法的图片 id");
     }
     return enqueue(() => {
-      const meta = state.library[id];
-      if (meta === undefined) throw codedError("ASSET_NOT_FOUND", "图片不存在");
+      if (state.library[id] === undefined) throw codedError("ASSET_NOT_FOUND", "图片不存在");
       const draft = structuredClone(state);
       const affectedSkins = [];
-      for (const [skinId, section] of Object.entries(draft.skins)) {
-        for (const field of listAssetFields(skinId)) {
-          if (section?.[field.key] === id) {
-            delete section[field.key];
-            affectedSkins.push({ skinId, key: field.key });
-          }
-        }
-      }
-      delete draft.library[id];
+      const meta = applyGalleryDelete(draft, id, affectedSkins);
       draft.revision += 1;
       commitState(draft); // state first: a crash here only orphans the blob
-      try { fs.unlinkSync(blobFileFor(id, meta.extension)); } catch {}
+      try { fs.unlinkSync(blobFileFor(meta.id, meta.extension)); } catch {}
       gcNow();
       return { revision: draft.revision, affectedSkins };
     });
