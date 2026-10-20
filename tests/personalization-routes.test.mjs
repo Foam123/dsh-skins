@@ -405,3 +405,86 @@ test("fence: PATCH with an unknown op is INVALID_CONFIG 400 and commits nothing"
   assert.equal(JSON.parse(state.body).code, "INVALID_CONFIG");
   assert.equal(store.snapshot().revision, 0, "unknown ops never reach the draft");
 });
+
+// ---- ADR-0015 Task 3: the new dialect crosses the real HTTP seam -----------
+// The PATCH route handler passes the body straight to the store and
+// publicError carries error.params through — both must hold with ZERO
+// changes to personalization-routes.js / errors.js (the plan pins this).
+
+async function patch(call, body) {
+  return call(makeRequest({
+    method: "PATCH",
+    url: "/dsh-skins/config",
+    headers: { ...TRUSTED, "content-type": "application/json" },
+    body,
+  }));
+}
+
+test("PATCH deleteAsset crosses the route seam with {revision, affectedSkins}", async () => {
+  const { call, store } = makeHarness();
+  const upload = await call(makeRequest({
+    method: "POST",
+    url: "/dsh-skins/library",
+    headers: { ...TRUSTED, "content-type": "image/png", "x-filename": encodeURIComponent("w.png") },
+    body: pngBytes(),
+  }));
+  const { asset } = JSON.parse(upload.body);
+  const revision = store.snapshot().revision;
+  await patch(call, {
+    baseRevision: revision,
+    operations: [{ op: "set", skinId: "openbmc", key: "wallpaper", value: asset.id }],
+  });
+
+  const removed = await patch(call, {
+    baseRevision: store.snapshot().revision,
+    operations: [{ op: "deleteAsset", assetId: asset.id }],
+  });
+  assert.equal(removed.status, 200);
+  const body = JSON.parse(removed.body);
+  assert.equal(body.revision, revision + 2);
+  assert.deepEqual(body.affectedSkins, [{ skinId: "openbmc", key: "wallpaper" }]);
+});
+
+test("PATCH clearLibrary is idempotent through the route seam", async () => {
+  const { call, store } = makeHarness();
+  await call(makeRequest({
+    method: "POST",
+    url: "/dsh-skins/library",
+    headers: { ...TRUSTED, "content-type": "image/png", "x-filename": encodeURIComponent("w.png") },
+    body: pngBytes(),
+  }));
+  const first = await patch(call, {
+    baseRevision: store.snapshot().revision,
+    operations: [{ op: "clearLibrary" }],
+  });
+  assert.equal(first.status, 200);
+  assert.equal(JSON.parse(first.body).revision, 2);
+
+  const second = await patch(call, {
+    baseRevision: store.snapshot().revision,
+    operations: [{ op: "clearLibrary" }],
+  });
+  assert.equal(second.status, 200, "empty library → success");
+  assert.equal(JSON.parse(second.body).revision, 2, "no bump");
+});
+
+test("params.issues crosses the route seam on INVALID_CONFIG 400", async () => {
+  const { call, store } = makeHarness();
+  const missing = `u_${"0".repeat(32)}`;
+  const state = await patch(call, {
+    baseRevision: 0,
+    operations: [
+      { op: "set", skinId: "meirenzhi", key: "panelOpacity", value: 999 },
+      { op: "deleteAsset", assetId: missing },
+    ],
+  });
+  assert.equal(state.status, 400);
+  const body = JSON.parse(state.body);
+  assert.equal(body.code, "INVALID_CONFIG");
+  assert.deepEqual(body.params.issues, [
+    { opIndex: 0, skinId: "meirenzhi", key: "panelOpacity", code: "BAD_VALUE" },
+    { opIndex: 1, assetId: missing, code: "ASSET_NOT_FOUND" },
+  ]);
+  assert.equal(body.params.code, "BAD_VALUE");
+  assert.equal(store.snapshot().revision, 0);
+});
