@@ -307,7 +307,8 @@ export function createConfigClient(options = {}) {
               }
             }
             // A batch whose issues are ALL dangling is fully self-healed: the
-            // named reversion notice replaces the generic failure strip.
+            // named reversion notice replaces the generic failure strip, and
+            // the return value says so (nothing is blocked).
             setFlushFailure(null, onlyDangling ? null : errorMessage);
             emit();
             // Self-healing continuation: re-flush the surviving previews
@@ -315,6 +316,7 @@ export function createConfigClient(options = {}) {
             // continuation excises at least one more preview or terminates on
             // a named error.
             if (excised && previews.size > 0) void flushNow();
+            if (onlyDangling && excised) return { flushed: 0, blocked: null, selfHealed: true };
             return { flushed: 0, blocked: "error", errorMessage };
           }
           await response.json().catch(() => null); // drained; resync happens in refetch()

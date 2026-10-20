@@ -875,6 +875,44 @@ test("deleteImage: 409 twice → named REVISION_CONFLICT error", async () => {
   client.dispose();
 });
 
+test("deleteImage: 400 ASSET_NOT_FOUND after the asset vanished → silent success", async () => {
+  const asset = { id: "u_b", displayName: "b.png", extension: "png" };
+  let gets = 0;
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      return jsonResponse(400, {
+        error: "校验失败", code: "INVALID_CONFIG",
+        params: { code: "ASSET_NOT_FOUND", issues: [{ opIndex: 0, assetId: "u_b", code: "ASSET_NOT_FOUND" }] },
+      });
+    }
+    gets += 1;
+    return snapshotBody({ revision: gets, library: gets === 1 ? [asset] : [] });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  const result = await client.deleteImage("u_b");
+  assert.deepEqual(result, { affectedSkins: [] }, "the refetch shows it gone — silent success (B2)");
+  client.dispose();
+});
+
+test("deleteImage: 400 ASSET_NOT_FOUND with the asset still present → named error", async () => {
+  const asset = { id: "u_b", displayName: "b.png", extension: "png" };
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      return jsonResponse(400, {
+        error: "校验失败", code: "INVALID_CONFIG",
+        params: { code: "ASSET_NOT_FOUND", issues: [{ opIndex: 0, assetId: "u_b", code: "ASSET_NOT_FOUND" }] },
+      });
+    }
+    return snapshotBody({ library: [asset] });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  const result = await client.deleteImage("u_b");
+  assert.equal(result.error, "ASSET_NOT_FOUND", "still there after the refetch — named, not silent");
+  client.dispose();
+});
+
 test("clearLibrary: 409 with the library already emptied → silent success", async () => {
   let gets = 0;
   const fetchImpl = makeFetch((n, url, init) => {
@@ -932,7 +970,8 @@ test("flush: dangling-only issues excise the poison by name and auto re-flush he
   client.preview("openbmc", "wallpaper", "u_ffffffffffffffffffffffffffffffff");
   client.preview("meirenzhi", "slogan", { zh: "甲", en: "A" });
   const result = await client.flushNow();
-  assert.equal(result.blocked, "error");
+  assert.deepEqual(result, { flushed: 0, blocked: null, selfHealed: true },
+    "a dangling-only batch is self-healed, not blocked");
   assert.deepEqual(client.getState().revertedFields,
     [{ skinId: "openbmc", key: "wallpaper" }], "the poison is named, not silenced");
   assert.equal(client.getState().lastFlushError, null, "dangling-only: no generic failure strip");
