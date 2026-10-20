@@ -307,16 +307,19 @@ export function createConfigClient(options = {}) {
               }
             }
             // A batch whose issues are ALL dangling is fully self-healed: the
-            // named reversion notice replaces the generic failure strip, and
-            // the return value says so (nothing is blocked).
-            setFlushFailure(null, onlyDangling ? null : errorMessage);
+            // named reversion notice replaces the generic failure strip — but
+            // only when something was actually excised. A dangling-coded
+            // issue with a malformed payload (no skinId/key) keeps its named
+            // error: unknown shapes never pass silently.
+            const healed = onlyDangling && excised;
+            setFlushFailure(null, healed ? null : errorMessage);
             emit();
             // Self-healing continuation: re-flush the surviving previews
             // without waiting for the user's next edit. Bounded — each
             // continuation excises at least one more preview or terminates on
             // a named error.
             if (excised && previews.size > 0) void flushNow();
-            if (onlyDangling && excised) return { flushed: 0, blocked: null, selfHealed: true };
+            if (healed) return { flushed: 0, blocked: null, selfHealed: true };
             return { flushed: 0, blocked: "error", errorMessage };
           }
           await response.json().catch(() => null); // drained; resync happens in refetch()

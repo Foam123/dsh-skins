@@ -1017,6 +1017,30 @@ test("flush: mixed issues excise the dangling preview and name the rest", async 
   client.dispose();
 });
 
+test("flush: a dangling-coded issue with a malformed payload stays a named error (fail-closed)", async () => {
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      // Dangling CODE but no usable skinId/key — nothing may be excised and
+      // the error strip must survive (unknown shapes never pass silently).
+      return jsonResponse(400, {
+        error: "校验失败", code: "INVALID_CONFIG",
+        params: { code: "MISSING_ASSET", issues: [{ opIndex: 0, code: "MISSING_ASSET" }] },
+      });
+    }
+    return snapshotBody();
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  client.preview("openbmc", "wallpaper", "u_ffffffffffffffffffffffffffffffff");
+  const result = await client.flushNow();
+  assert.deepEqual(result, { flushed: 0, blocked: "error", errorMessage: "校验失败" });
+  const state = client.getState();
+  assert.deepEqual(state.revertedFields, [], "nothing named → nothing excised");
+  assert.equal(state.lastFlushError, "校验失败", "the strip survives");
+  assert.equal(state.dirtyCount, 1, "the preview stays dirty for retry");
+  client.dispose();
+});
+
 test("upload success merges locally — no GET /config after the POST (rider ①)", async () => {
   const asset = { id: "u_new", displayName: "w.png", extension: "png", byteLength: 8 };
   const fetchImpl = makeFetch((n, url, init) => {

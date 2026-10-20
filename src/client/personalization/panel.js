@@ -231,10 +231,12 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
     // Preview-layer references (ADR-0015): dirty previews may point at
     // assets the persisted snapshot knows nothing about — they will be
     // excised and reverted on flush, so the confirm dialogs must show them
-    // too (marked as unsaved), not just the persisted references.
+    // too (marked as unsaved), not just the persisted references. The
+    // marking joins with the same " · " separator as persisted refs, so no
+    // locale-specific punctuation is hardcoded here.
     const previewRefsFor = (assetId) => (configClient.dirtyFields?.() ?? [])
       .filter((entry) => entry.value === assetId)
-      .map((entry) => `${labelFor(entry.skinId)} · ${entry.key}（${tr("personalization.library.previewRef")}）`);
+      .map((entry) => `${labelFor(entry.skinId)} · ${entry.key} · ${tr("personalization.library.previewRef")}`);
 
     const removeAsset = (asset) => {
       if (deletingId !== null || clearing) return;
