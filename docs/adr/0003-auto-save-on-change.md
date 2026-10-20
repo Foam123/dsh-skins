@@ -28,3 +28,4 @@ ADR-0001 在发布前把 v2.3 的"预览 + 400ms 防抖自动落库"改判为显
 ## Amendments
 
 - **2026-09-01（v2.5 用户裁决 #14）**：tgcf 个性化字段由五个合并为三个——「面板不透明度/背景模糊/遮罩强度」合并为单一「面板通透度」（曲线联动派生三层视觉）。本ADR的自动保存语义不变，仅字段枚举随字段现实更新；合并决策的完整记录见设计文档 §7.2 裁决 #14。未新立 ADR：1.0.0 未发布，无外部存量数据，无可逆性损失。
+- **2026-10-20（接口收窄）**：客户端可写判定与保存失败呈现收窄为单一出口——`canWrite()`（`status==="synced" && mode!=="recovery"`，内部写闸门同源、recovery 预拒绝）与 `notices`（`{kind:"conflict"|"error"|"reverted", message?, fields?}[]`，每 kind 至多一条，`error` 与 `reverted` 可共存）。`lastFlushCode`/`lastFlushError`/`revertedFields` 三字段与 `writeBlocked`/`retry`/`dirtyFields` 成员退出对外接口；面板不再自行推导可写性（此前面板补偿了 client 闸门缺失的 recovery 维度）。清除时机逐字保留：编辑清 conflict/error，健康落盘清全部，STORE_READONLY 降级清 error。行为零变化，面板渲染逐像素不变。
