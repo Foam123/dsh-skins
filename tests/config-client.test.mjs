@@ -48,7 +48,7 @@ test("boot transitions loading → synced and exposes the snapshot", async () =>
   assert.equal(client.getState().status, "synced");
   assert.equal(client.getState().revision, 7);
   assert.deepEqual(client.getState().skins.meirenzhi, { blur: 5 });
-  assert.equal(client.writeBlocked(), null);
+  assert.equal(client.canWrite(), true);
   client.dispose();
 });
 
@@ -110,7 +110,7 @@ test("failed boot lands in offline-failed and writes are gated", async () => {
   const client = flushingClient(fetchImpl);
   await client.boot();
   assert.equal(client.getState().status, "offline-failed");
-  assert.equal(client.writeBlocked(), "offline");
+  assert.equal(client.canWrite(), false);
   client.preview("meirenzhi", "panelOpacity",3);
   const result = await client.flushNow();
   assert.deepEqual(result, { flushed: 0, blocked: "offline" });
@@ -123,7 +123,7 @@ test("unsupported configVersion becomes read-only", async () => {
   const client = flushingClient(fetchImpl);
   await client.boot();
   assert.equal(client.getState().status, "unsupported-readonly");
-  assert.equal(client.writeBlocked(), "unsupported");
+  assert.equal(client.canWrite(), false);
   client.dispose();
 });
 
@@ -498,6 +498,46 @@ test("fence: offline gates deleteImage locally with zero PATCH attempts", async 
   client.dispose();
 });
 
+// ---- canWrite: the single write gate (interface narrowing Task 2) -----------
+
+test("canWrite absorbs recovery mode — every write path pre-rejects with zero requests", async () => {
+  const fetchImpl = makeFetch(() => snapshotBody({ mode: "recovery", recovery: { assets: 2 } }));
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  assert.equal(client.getState().status, "synced");
+  assert.equal(client.getState().mode, "recovery");
+  assert.equal(client.canWrite(), false, "recovery blocks writes even while synced");
+  client.preview("meirenzhi", "panelOpacity", 3);
+  const callsAfterBoot = fetchImpl.calls.length;
+  assert.deepEqual(await client.flushNow(), { flushed: 0, blocked: "recovery" });
+  assert.deepEqual(await client.deleteImage("u_b"), { error: "recovery" });
+  assert.deepEqual(await client.clearLibrary(), { error: "recovery" });
+  assert.deepEqual(await client.uploadImage(new Uint8Array([1]), "w.png"), { error: "recovery" });
+  assert.equal(client.getState().dirtyCount, 1, "the preview survives for confirmation-recovery time");
+  assert.equal(fetchImpl.calls.length, callsAfterBoot, "recovery pre-rejection attempts zero requests");
+  client.dispose();
+});
+
+test("canWrite mirrors the gate across statuses", async () => {
+  const ok = flushingClient(makeFetch(() => snapshotBody()));
+  await ok.boot();
+  assert.equal(ok.canWrite(), true);
+  ok.dispose();
+  const loading = flushingClient(makeFetch(() => snapshotBody()));
+  assert.equal(loading.canWrite(), false, "loading (pre-boot) cannot write");
+  loading.dispose();
+  const offline = flushingClient(makeFetch(() => { throw new Error("network down"); }));
+  await offline.boot();
+  assert.equal(offline.canWrite(), false);
+  assert.equal(offline.getState().status, "offline-failed");
+  offline.dispose();
+  const unsupported = flushingClient(makeFetch(() => snapshotBody({ mode: "unsupported" })));
+  await unsupported.boot();
+  assert.equal(unsupported.canWrite(), false);
+  assert.equal(unsupported.getState().status, "unsupported-readonly");
+  unsupported.dispose();
+});
+
 test("STORE_RECOVERY_REQUIRED refetches recovery state without retrying PATCH", async () => {
   let patchCount = 0;
   const fetchImpl = makeFetch((index, url, init) => {
@@ -733,7 +773,7 @@ test("HTTP 500 responses land in offline-failed, never synced", async () => {
   const client = flushingClient(fetchImpl);
   await client.boot();
   assert.equal(client.getState().status, "offline-failed");
-  assert.equal(client.writeBlocked(), "offline");
+  assert.equal(client.canWrite(), false);
   client.dispose();
 });
 

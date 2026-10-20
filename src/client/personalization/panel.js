@@ -472,8 +472,7 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
       if (confirmationRef.current !== confirmation) return;
       confirmationRef.current = null; // guard against two clicks in one tick
       setConfirmation(null);
-      const current = configClient.getState();
-      if (current.status === "synced" && current.mode !== "recovery") {
+      if (configClient.canWrite()) {
         void confirmation.accept();
       }
     };
@@ -492,7 +491,7 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
     }, []);
 
     if (schema === null) return null;
-    const writesBlocked = state.status !== "synced" || state.mode === "recovery";
+    const writesBlocked = !configClient.canWrite();
     const overrides = configClient.effectiveOverrides(skinId);
     const { values } = mergeValues(skinId, overrides, undefined, profile);
     const hasAnyOverride = Object.keys(overrides).length > 0;
@@ -540,7 +539,7 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
         jsx("span", { children: tr("personalization.status.offline") }),
         jsx("button", {
           type: "button", className: "dsh-skins-pz-btn",
-          onClick: () => configClient.retry(),
+          onClick: () => configClient.refetch(),
           children: tr("personalization.status.retry"),
         }),
       ] }));

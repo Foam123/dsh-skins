@@ -33,7 +33,7 @@ function makeConfigClient(overrides = {}) {
   // Preview layer, mirroring the real client's effectiveOverrides(skinId):
   // returns THAT SKIN's section with previews layered on top.
   const previews = new Map();
-  const calls = { preview: [], previewReset: [], restore: 0, flushNow: 0, retry: 0, clearLibrary: 0 };
+  const calls = { preview: [], previewReset: [], restore: 0, flushNow: 0, refetch: 0, clearLibrary: 0 };
   const emit = () => { for (const l of [...listeners]) l(state); };
   return {
     calls,
@@ -56,7 +56,8 @@ function makeConfigClient(overrides = {}) {
       .filter(([, value]) => value !== null)
       .map(([composite, value]) => { const [skinId, key] = composite.split(" "); return { skinId, key, value }; }),
     flushNow: async () => { calls.flushNow += 1; return { flushed: state.dirtyCount, blocked: null }; },
-    retry: () => { calls.retry += 1; },
+    refetch: () => { calls.refetch += 1; },
+    canWrite: () => state.status === "synced" && state.mode !== "recovery",
     uploadImage: async () => ({ error: "offline" }),
     deleteImage: async (id) => { void id; return { error: "offline" }; },
     clearLibrary: async () => { calls.clearLibrary += 1; return { affectedSkins: [] }; },
@@ -465,6 +466,24 @@ test("confirmation remains fail-closed when synchronization is lost while open",
   await tick();
   assert.equal(findButton(dialogOf(panel), "personalization.confirm").props.disabled, true);
   // A stale captured handler must still refuse the write even if called directly.
+  findButton(dialogOf(panel), "personalization.confirm").props.onClick();
+  await tick();
+  assert.equal(config.calls.flushNow, 0);
+  assert.deepEqual(config.calls.previewReset, []);
+});
+
+test("confirmation stays fail-closed in recovery mode (canWrite absorbs the recovery gate)", async () => {
+  const config = makeConfigClient({ skins: { meirenzhi: { panelOpacity: 66 } } });
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  findButton(panel.tree(), "personalization.reset").props.onClick();
+  await tick();
+  // Recovery mode blocks writes while status stays synced — the dimension
+  // only the client's own gate used to miss and the panel had to compensate.
+  config.setState({ mode: "recovery" });
+  await tick();
+  assert.equal(config.getState().status, "synced", "still synced — recovery is not an offline state");
+  assert.equal(findButton(dialogOf(panel), "personalization.confirm").props.disabled, true);
   findButton(dialogOf(panel), "personalization.confirm").props.onClick();
   await tick();
   assert.equal(config.calls.flushNow, 0);

@@ -175,8 +175,11 @@ export function createConfigClient(options = {}) {
   const FLUSH_DEBOUNCE_MS = 400;
   let flushTimer = null;
 
-  function gateWrites() {
-    if (status === "synced") return null;
+  /** Single write gate (canWrite's source): null = writable, else the reason. */
+  function writeGate() {
+    if (status === "synced") {
+      return snapshot.mode === "recovery" ? "recovery" : null;
+    }
     if (status === "loading") return "loading";
     if (status === "unsupported-readonly") return "unsupported";
     return "offline";
@@ -206,7 +209,7 @@ export function createConfigClient(options = {}) {
     writeChain = writeChain.then(async () => {
       try {
         if (disposed) return { flushed: 0, blocked: "disposed" };
-        const blocked = gateWrites();
+        const blocked = writeGate();
         if (blocked !== null) return { flushed: 0, blocked };
         // ADR-0003: retry once only after a conflict refetch has actually
         // applied a newer normal-mode snapshot.
@@ -409,11 +412,6 @@ export function createConfigClient(options = {}) {
     return merged;
   }
 
-  function retry() {
-    if (status !== "offline-failed" && status !== "synced") return refetch();
-    return refetch();
-  }
-
   // -- asset operations (library management for the panel) -------------------
 
   /** SHA-256 hex of the bytes, when the platform provides WebCrypto. */
@@ -482,7 +480,7 @@ export function createConfigClient(options = {}) {
   }
 
   async function uploadImage(file, displayName) {
-    const blocked = gateWrites();
+    const blocked = writeGate();
     if (blocked !== null) return { error: blocked };
     const bytes = file instanceof Uint8Array ? file : new Uint8Array(await file.arrayBuffer());
 
@@ -558,7 +556,7 @@ export function createConfigClient(options = {}) {
   function runGalleryOp(operations, goalAchieved) {
     writeChain = writeChain.then(async () => {
       if (disposed) return { error: "disposed" };
-      const blocked = gateWrites();
+      const blocked = writeGate();
       if (blocked !== null) return { error: blocked };
       for (let attempt = 0; attempt < 2; attempt += 1) {
         let response;
@@ -609,7 +607,7 @@ export function createConfigClient(options = {}) {
   }
 
   async function deleteImage(id) {
-    const blocked = gateWrites();
+    const blocked = writeGate();
     if (blocked !== null) return { error: blocked };
     return runGalleryOp([{ op: "deleteAsset", assetId: id }],
       () => !snapshot.library.some((entry) => entry.id === id));
@@ -648,7 +646,6 @@ export function createConfigClient(options = {}) {
   const api = {
     boot: refetch,
     refetch,
-    retry,
     flushNow,
     preview,
     previewReset,
@@ -660,7 +657,7 @@ export function createConfigClient(options = {}) {
     confirmRecovery,
     assetUrl,
     getState: publicState,
-    writeBlocked: gateWrites,
+    canWrite: () => writeGate() === null,
     onStateChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
