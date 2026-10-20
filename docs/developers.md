@@ -18,6 +18,8 @@
 
 **双端结构**。客户端负责皮肤与切换界面，Host 负责个性化配置、图库与资产路由。esbuild 产出 `lib/client.js` 与 `lib/index.js`，产物随仓库提交——npm 安装不在目标机器上构建。
 
+**个性化写路径（ADR-0015）**。一切状态写走同一种带前置条件的方言：`PATCH /dsh-skins/config` 的 operations 词汇为 `set | delete | deleteAsset | clearLibrary`（白名单之外即 400），`baseRevision` 过期返回 409；图库删除因会连带回退引用字段，所以也是配置写；`clearLibrary` 服务端展开、单次提交。批量校验失败时响应携带 `params.issues: [{opIndex, skinId?, key?, assetId?, code}]`（逐项裁决，`params.code` 保留兼容老读者），客户端据此对悬空引用（`MISSING_ASSET`/`BAD_ASSET`）点名摘除预览并回退（GLOSSARY「悬空预览」），其余错误保脏具名重试。**图库上传豁免前置条件**：纯追加不改写字段，不存在覆盖他人数据的冲突面——这是设计裁决而非缺口。旧式 `DELETE /library/{id}` 路由保留为混版宽容适配器（升级瞬间旧标签页无前置条件直删，语义不变），新客户端一律走 PATCH 方言。
+
 **明暗持久化**。非 loopback 浏览器中，插件监听官方 `theme/change` 事件，把浅色/深色/跟随系统存入 `localStorage["dsh-skins:theme-preference"]`，启动时经官方 `theme.setTheme()` 恢复。loopback 浏览器不启用这一回退，直接使用 DSH 自身的 Host 持久化。
 
 **报错本地化**。所有会显示在界面里的 Host 报错都带稳定错误码与模板参数，客户端据此渲染中英文文案；未知错误码回退为 Host 原始消息。
