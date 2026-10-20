@@ -228,26 +228,23 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
       }
     };
 
-    // Preview-layer references (ADR-0015): dirty previews may point at
-    // assets the persisted snapshot knows nothing about — they will be
-    // excised and reverted on flush, so the confirm dialogs must show them
-    // too (marked as unsaved), not just the persisted references. The
-    // marking joins with the same " · " separator as persisted refs, so no
-    // locale-specific punctuation is hardcoded here.
-    const previewRefsFor = (assetId) => (configClient.dirtyFields?.() ?? [])
-      .filter((entry) => entry.value === assetId)
-      .map((entry) => `${labelFor(entry.skinId)} · ${entry.key} · ${tr("personalization.library.previewRef")}`);
+    // Asset references across both layers (ADR-0015): the client merges the
+    // persisted snapshot's references with preview-layer (unsaved) ones —
+    // dirty previews may point at assets the snapshot knows nothing about;
+    // they will be excised and reverted on flush, so the confirm dialogs must
+    // show them too (marked as unsaved). The marking joins with the same
+    // " · " separator as persisted refs, so no locale-specific punctuation
+    // is hardcoded here.
+    const referenceLabelsFor = (assetId) => configClient.referencesFor(assetId).map((entry) =>
+      entry.layer === "preview"
+        ? `${labelFor(entry.skinId)} · ${entry.key} · ${tr("personalization.library.previewRef")}`
+        : `${labelFor(entry.skinId)} · ${entry.key}`);
 
     const removeAsset = (asset) => {
       if (deletingId !== null || clearing) return;
-      const references = state.references[asset.id] ?? [];
-      const previewRefs = previewRefsFor(asset.id);
-      if (references.length === 0 && previewRefs.length === 0) return deleteAsset(asset);
-      const names = [
-        ...references.map((entry) => `${labelFor(entry.skinId)} · ${entry.key}`),
-        ...previewRefs,
-      ].join("\n");
-      requestConfirm(`${tr("personalization.library.deleteConfirm")}\n${names}`,
+      const references = referenceLabelsFor(asset.id);
+      if (references.length === 0) return deleteAsset(asset);
+      requestConfirm(`${tr("personalization.library.deleteConfirm")}\n${references.join("\n")}`,
         () => deleteAsset(asset));
     };
 
@@ -255,10 +252,7 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
       if (clearing || deletingId !== null || library.length === 0) return;
       const names = new Map();
       for (const asset of library) {
-        for (const entry of state.references[asset.id] ?? []) {
-          names.set(`${labelFor(entry.skinId)} · ${entry.key}`, true);
-        }
-        for (const label of previewRefsFor(asset.id)) {
+        for (const label of referenceLabelsFor(asset.id)) {
           names.set(label, true);
         }
       }

@@ -59,6 +59,7 @@ function makeConfigClient() {
     restore: () => { calls.restore += 1; previews.clear(); state = { ...state, dirtyCount: 0 }; emit(); },
     flushNow: async () => { calls.flushNow += 1; return { flushed: 1 }; },
     canWrite: () => state.status === "synced" && state.mode !== "recovery",
+    referencesFor: () => [],
     uploadImage: async () => ({ error: "offline" }),
     deleteImage: async () => ({ error: "offline" }),
     confirmRecovery: async () => ({ ok: true }),

@@ -53,9 +53,12 @@ function makeConfigClient(overrides = {}) {
     },
     preview: (skinId, key, value) => { calls.preview.push({ skinId, key, value }); previews.set(`${skinId} ${key}`, value); state = { ...state, dirtyCount: previews.size, notices: state.notices.filter((n) => n.kind === "reverted") }; emit(); },
     previewReset: (skinId, key) => { calls.previewReset.push({ skinId, key }); previews.set(`${skinId} ${key}`, null); state = { ...state, dirtyCount: previews.size, notices: state.notices.filter((n) => n.kind === "reverted") }; emit(); },
-    dirtyFields: () => [...previews.entries()]
-      .filter(([, value]) => value !== null)
-      .map(([composite, value]) => { const [skinId, key] = composite.split(" "); return { skinId, key, value }; }),
+    referencesFor: (assetId) => [
+      ...(state.references[assetId] ?? []).map((entry) => ({ ...entry, layer: "persisted" })),
+      ...[...previews.entries()]
+        .filter(([, value]) => value !== null && value === assetId)
+        .map(([composite]) => { const [skinId, key] = composite.split(" "); return { skinId, key, layer: "preview" }; }),
+    ],
     flushNow: async () => { calls.flushNow += 1; return { flushed: state.dirtyCount, blocked: null }; },
     refetch: () => { calls.refetch += 1; },
     canWrite: () => state.status === "synced" && state.mode !== "recovery",
@@ -63,7 +66,6 @@ function makeConfigClient(overrides = {}) {
     deleteImage: async (id) => { void id; return { error: "offline" }; },
     clearLibrary: async () => { calls.clearLibrary += 1; return { affectedSkins: [] }; },
     confirmRecovery: async () => ({ ok: true }),
-    refetch: async () => {},
     assetUrl: (asset) => `/dsh-skins/assets/${asset.id}.png`,
   };
 }

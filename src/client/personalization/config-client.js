@@ -626,8 +626,8 @@ export function createConfigClient(options = {}) {
     return runGalleryOp([{ op: "clearLibrary" }], () => snapshot.library.length === 0);
   }
 
-  /** Dirty preview fields with a value set (reset ops reference nothing). */
-  function dirtyFields() {
+  /** Valued preview fields (reset ops reference nothing). */
+  function valuedPreviews() {
     const fields = [];
     for (const [composite, value] of previews) {
       if (value === null) continue;
@@ -635,6 +635,18 @@ export function createConfigClient(options = {}) {
       fields.push({ skinId, key, value });
     }
     return fields;
+  }
+
+  /** References to an asset across both layers: the persisted snapshot's
+   * field references first, then preview-layer (unsaved) references — the
+   * confirm dialogs render both, previews marked unsaved (ADR-0015). */
+  function referencesFor(assetId) {
+    const persisted = (snapshot.references?.[assetId] ?? [])
+      .map((entry) => ({ skinId: entry.skinId, key: entry.key, layer: "persisted" }));
+    const preview = valuedPreviews()
+      .filter((entry) => entry.value === assetId)
+      .map((entry) => ({ skinId: entry.skinId, key: entry.key, layer: "preview" }));
+    return [...persisted, ...preview];
   }
 
   async function confirmRecovery() {
@@ -662,7 +674,7 @@ export function createConfigClient(options = {}) {
     uploadImage,
     deleteImage,
     clearLibrary,
-    dirtyFields,
+    referencesFor,
     confirmRecovery,
     assetUrl,
     getState: publicState,

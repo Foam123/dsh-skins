@@ -1262,11 +1262,39 @@ test("upload success merges locally — no GET /config after the POST (rider ①
   client.dispose();
 });
 
-test("dirtyFields lists valued previews only (the panel's preview-reference seam)", async () => {
+test("referencesFor merges persisted and preview references, persisted first", async () => {
+  const fetchImpl = makeFetch(() => snapshotBody({
+    references: { u_a: [{ skinId: "openbmc", key: "wallpaper" }] },
+  }));
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  // Preview-only reference (the asset the snapshot knows nothing about).
+  client.preview("meirenzhi", "wallpaper", "u_b");
+  assert.deepEqual(client.referencesFor("u_b"),
+    [{ skinId: "meirenzhi", key: "wallpaper", layer: "preview" }]);
+  // Persisted-only reference.
+  assert.deepEqual(client.referencesFor("u_a"),
+    [{ skinId: "openbmc", key: "wallpaper", layer: "persisted" }]);
+  // Both layers on one asset: persisted first, no dedup; a non-asset
+  // preview (slogan text) references nothing.
+  client.preview("uefi-harness", "wallpaper", "u_a");
+  client.preview("meirenzhi", "slogan", { zh: "甲", en: "A" });
+  assert.deepEqual(client.referencesFor("u_a"), [
+    { skinId: "openbmc", key: "wallpaper", layer: "persisted" },
+    { skinId: "uefi-harness", key: "wallpaper", layer: "preview" },
+  ]);
+  client.dispose();
+});
+
+test("referencesFor's preview layer carries valued previews only (set-then-reset decays)", async () => {
   const client = flushingClient(makeFetch(() => snapshotBody()));
   await client.boot();
   client.preview("openbmc", "wallpaper", "u_x");
   client.previewReset("meirenzhi", "slogan");
-  assert.deepEqual(client.dirtyFields(), [{ skinId: "openbmc", key: "wallpaper", value: "u_x" }]);
+  assert.deepEqual(client.referencesFor("u_x"),
+    [{ skinId: "openbmc", key: "wallpaper", layer: "preview" }]);
+  // Resetting the same field drops the reference — a reset references nothing.
+  client.previewReset("openbmc", "wallpaper");
+  assert.deepEqual(client.referencesFor("u_x"), [], "a reset preview references no asset");
   client.dispose();
 });
