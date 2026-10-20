@@ -33,7 +33,7 @@ function makeConfigClient(overrides = {}) {
   // Preview layer, mirroring the real client's effectiveOverrides(skinId):
   // returns THAT SKIN's section with previews layered on top.
   const previews = new Map();
-  const calls = { preview: [], previewReset: [], restore: 0, flushNow: 0, retry: 0 };
+  const calls = { preview: [], previewReset: [], restore: 0, flushNow: 0, retry: 0, clearLibrary: 0 };
   const emit = () => { for (const l of [...listeners]) l(state); };
   return {
     calls,
@@ -52,10 +52,14 @@ function makeConfigClient(overrides = {}) {
     },
     preview: (skinId, key, value) => { calls.preview.push({ skinId, key, value }); previews.set(`${skinId} ${key}`, value); state = { ...state, dirtyCount: previews.size, lastFlushError: null }; emit(); },
     previewReset: (skinId, key) => { calls.previewReset.push({ skinId, key }); previews.set(`${skinId} ${key}`, null); state = { ...state, dirtyCount: previews.size, lastFlushError: null }; emit(); },
+    dirtyFields: () => [...previews.entries()]
+      .filter(([, value]) => value !== null)
+      .map(([composite, value]) => { const [skinId, key] = composite.split(" "); return { skinId, key, value }; }),
     flushNow: async () => { calls.flushNow += 1; return { flushed: state.dirtyCount, blocked: null }; },
     retry: () => { calls.retry += 1; },
     uploadImage: async () => ({ error: "offline" }),
     deleteImage: async (id) => { void id; return { error: "offline" }; },
+    clearLibrary: async () => { calls.clearLibrary += 1; return { affectedSkins: [] }; },
     confirmRecovery: async () => ({ ok: true }),
     refetch: async () => {},
     assetUrl: (asset) => `/dsh-skins/assets/${asset.id}.png`,
@@ -329,7 +333,9 @@ test("offline: every write path is disabled — edits included (ADR-0003)", asyn
   assert.equal(translucency.props.disabled, true, "field controls disabled offline");
 });
 
-test("清空图库 confirms with the affected list and stops at the first failure (Q45/L8)", async () => {
+// G0 exception ② (ADR-0015 plan): rewritten — 清空图库 is ONE atomic op now;
+// the loop-and-stop-at-first-failure choreography was the ruled-out behavior.
+test("清空图库 confirms with the affected list and clears via one atomic op (ADR-0015)", async () => {
   const assets = [
     { id: "u_0123456789abcdef0123456789abcdef", displayName: "a.png" },
     { id: "u_0123456789abcdef0123456789abcdeff", displayName: "b.png" },
@@ -342,7 +348,7 @@ test("清空图库 confirms with the affected list and stops at the first failur
   const config = makeConfigClient({ status: "synced", library: assets, references });
   config.deleteImage = async (id) => {
     deleted.push(id);
-    return id === assets[1].id ? { error: "boom" } : { affectedSkins: [] };
+    return { affectedSkins: [] };
   };
   const panel = mountPanel({ skinId: "meirenzhi", status: "synced", config });
   await tick();
@@ -355,23 +361,33 @@ test("清空图库 confirms with the affected list and stops at the first failur
   assert.ok(text.includes("count=2"), "count in the confirm text");
   assert.ok(text.includes("meirenzhi · wallpaper"), "affected pair listed");
   assert.ok(text.includes("openbmc · wallpaper"), "affected pair listed");
-  assert.deepEqual(deleted, [], "no image is deleted before approval");
+  assert.deepEqual(deleted, [], "no per-asset delete is issued");
+  assert.equal(config.calls.clearLibrary, 0, "nothing before approval");
   await confirmDialog(panel);
-  assert.deepEqual(deleted, [assets[0].id, assets[1].id], "stops at the first failure");
-  assert.ok(textsOf(panel.tree()).includes("personalization.library.clearFailed"), "failure surfaced");
+  assert.equal(config.calls.clearLibrary, 1, "exactly one atomic clear op");
+  assert.deepEqual(deleted, [], "the N-delete loop is gone — one op replaced it");
+
+  const failing = makeConfigClient({ status: "synced", library: assets, references });
+  failing.clearLibrary = async () => ({ error: "boom" });
+  const failPanel = mountPanel({ skinId: "meirenzhi", status: "synced", config: failing });
+  await tick();
+  findButton(failPanel.tree(), "personalization.library.clear").props.onClick();
+  await tick();
+  await confirmDialog(failPanel);
+  assert.ok(textsOf(failPanel.tree()).includes("personalization.library.clearFailed"), "failure surfaced");
 });
 
 test("declining the clear-library confirm deletes nothing", async () => {
   const assets = [{ id: "u_0123456789abcdef0123456789abcdef", displayName: "a.png" }];
   const config = makeConfigClient({ status: "synced", library: assets });
-  config.deleteImage = async () => { throw new Error("must not be called"); };
+  config.clearLibrary = async () => { throw new Error("must not be called"); };
   const panel = mountPanel({ skinId: "meirenzhi", status: "synced", config });
   await tick();
   findButton(panel.tree(), "personalization.library.clear").props.onClick();
   await tick();
   await cancelDialog(panel);
   assert.equal(dialogOf(panel), null, "cancel removes the HTML dialog");
-  // The throwing deleteImage stub proves cancellation did not delete anything.
+  assert.equal(config.calls.clearLibrary, 0, "the throwing stub proves cancellation cleared nothing");
 });
 
 test("Web profile retains native gallery confirmations for clear and referenced deletion", async () => {
@@ -379,16 +395,17 @@ test("Web profile retains native gallery confirmations for clear and referenced 
   const options = {
     library: [asset], references: { [asset.id]: [{ skinId: "meirenzhi", key: "wallpaper" }] },
   };
+  // G0 exception ② (ADR-0015): the clear path now rides ONE clearLibrary op.
   const clearConfig = makeConfigClient(options);
-  const cleared = [];
-  clearConfig.deleteImage = async (id) => { cleared.push(id); return { deleted: id }; };
+  const clearedOps = [];
+  clearConfig.clearLibrary = async () => { clearedOps.push("clear"); return { affectedSkins: [] }; };
   const clearPanel = mountPanel({ skinId: "meirenzhi", config: clearConfig, desktop: false });
   await tick();
   findButton(clearPanel.tree(), "personalization.library.clear").props.onClick();
   await tick();
   assert.equal(clearPanel.confirms.length, 1);
   assert.ok(clearPanel.confirms[0].includes("meirenzhi · wallpaper"));
-  assert.deepEqual(cleared, [asset.id]);
+  assert.deepEqual(clearedOps, ["clear"], "one atomic op after the native confirmation");
   assert.equal(dialogOf(clearPanel), null);
 
   const deleteConfig = makeConfigClient(options);
@@ -771,4 +788,86 @@ test("PANEL_CSS owns the panel visual interface", () => {
     "the panel column container belongs to the shell's CSS");
   assert.ok(!PANEL_CSS.includes("dsh-skins-pz-gear"),
     "the gear belongs to the shell's CSS (rendered inside the skin cards)");
+});
+
+// ---- ADR-0015: named reversions, preview-layer references, rider ② ----------
+
+test("dangling-preview reversions render a named notice strip (ADR-0015)", async () => {
+  const config = makeConfigClient({
+    revertedFields: [{ skinId: "openbmc", key: "wallpaper" }],
+  });
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  const texts = textsOf(panel.tree());
+  assert.ok(texts.includes("personalization.fieldReverted"), "the notice strip renders");
+  assert.ok(texts.some((value) => typeof value === "string" && value.includes("openbmc · wallpaper")),
+    "the fallen-back field is named");
+
+  const clean = makeConfigClient({ revertedFields: [] });
+  const cleanPanel = mountPanel({ skinId: "meirenzhi", config: clean });
+  await tick();
+  assert.ok(!textsOf(cleanPanel.tree()).includes("personalization.fieldReverted"),
+    "no notice when nothing was reverted");
+});
+
+test("delete confirm lists preview-layer references too, cross-skin (ADR-0015)", async () => {
+  const asset = { id: "u_0123456789abcdef0123456789abcdef", displayName: "preview.png" };
+  const config = makeConfigClient({ library: [asset] }); // zero persisted references
+  config.preview("openbmc", "wallpaper", asset.id); // dirty preview on ANOTHER skin
+  const panel = mountPanel({ skinId: "meirenzhi", config, desktop: false, confirmResponse: false });
+  await tick();
+  const deleteButton = flatten(panel.tree()).find((node) =>
+    node.type === "button" && String(node.props["aria-label"] ?? "").includes("preview.png"));
+  deleteButton.props.onClick();
+  await tick();
+  assert.equal(panel.confirms.length, 1, "a preview-only reference still opens the confirm");
+  assert.ok(panel.confirms[0].includes("openbmc · wallpaper"), "the cross-skin preview ref is listed");
+  assert.ok(panel.confirms[0].includes("personalization.library.previewRef"), "marked as unsaved");
+});
+
+test("unreferenced assets with no preview refs still delete without confirmation", async () => {
+  const asset = { id: "u_0123456789abcdef0123456789abcdef", displayName: "free.png" };
+  const deleted = [];
+  const config = makeConfigClient({ library: [asset] });
+  config.deleteImage = async (id) => { deleted.push(id); return { affectedSkins: [] }; };
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  const deleteButton = flatten(panel.tree()).find((node) =>
+    node.type === "button" && String(node.props["aria-label"] ?? "").includes("free.png"));
+  deleteButton.props.onClick();
+  await tick();
+  assert.deepEqual(deleted, [asset.id], "no confirm for a fully unreferenced asset");
+  assert.equal(panel.confirms.length, 0);
+});
+
+test("single upload auto-applies and flushes immediately (ADR-0015 rider ②)", async () => {
+  const config = makeConfigClient();
+  config.uploadImage = async () => ({ asset: { id: "u_new00000000000000000000000000000f", displayName: "n.png" } });
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  const input = flatten(panel.tree()).find((node) => node.type === "input" && node.props.type === "file");
+  await input.props.onChange({ target: { files: [{ name: "n.png", type: "image/png" }] } });
+  assert.deepEqual(config.calls.preview.at(-1),
+    { skinId: "meirenzhi", key: "wallpaper", value: "u_new00000000000000000000000000000f" },
+    "the upload is auto-applied");
+  assert.equal(config.calls.flushNow, 1, "the auto-applied preview saves at once — no debounce wait");
+});
+
+test("batch upload flushes once after the newest lands (ADR-0015 rider ②)", async () => {
+  const config = makeConfigClient();
+  const uploads = [];
+  config.uploadImage = async () => {
+    uploads.push(true);
+    return { asset: { id: `u_${uploads.length}${"0".repeat(31)}`, displayName: "b.png" } };
+  };
+  const panel = mountPanel({ skinId: "meirenzhi", config });
+  await tick();
+  const input = flatten(panel.tree()).find((node) => node.type === "input" && node.props.type === "file");
+  await input.props.onChange({ target: { files: [
+    { name: "a.png", type: "image/png" },
+    { name: "b.png", type: "image/png" },
+  ] } });
+  assert.equal(uploads.length, 2, "sequential batch uploads preserved (Q43)");
+  assert.equal(config.calls.flushNow, 1, "exactly one flush after the batch lands");
+  assert.equal(config.calls.preview.at(-1).value, `u_2${"0".repeat(31)}`, "the newest upload wins");
 });

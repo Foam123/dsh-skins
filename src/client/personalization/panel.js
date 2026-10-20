@@ -228,38 +228,51 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
       }
     };
 
+    // Preview-layer references (ADR-0015): dirty previews may point at
+    // assets the persisted snapshot knows nothing about — they will be
+    // excised and reverted on flush, so the confirm dialogs must show them
+    // too (marked as unsaved), not just the persisted references.
+    const previewRefsFor = (assetId) => (configClient.dirtyFields?.() ?? [])
+      .filter((entry) => entry.value === assetId)
+      .map((entry) => `${labelFor(entry.skinId)} · ${entry.key}（${tr("personalization.library.previewRef")}）`);
+
     const removeAsset = (asset) => {
       if (deletingId !== null || clearing) return;
       const references = state.references[asset.id] ?? [];
-      if (references.length === 0) return deleteAsset(asset);
-      const names = references.map((entry) => `${labelFor(entry.skinId)} · ${entry.key}`).join("\n");
+      const previewRefs = previewRefsFor(asset.id);
+      if (references.length === 0 && previewRefs.length === 0) return deleteAsset(asset);
+      const names = [
+        ...references.map((entry) => `${labelFor(entry.skinId)} · ${entry.key}`),
+        ...previewRefs,
+      ].join("\n");
       requestConfirm(`${tr("personalization.library.deleteConfirm")}\n${names}`,
         () => deleteAsset(asset));
     };
 
     const clearLibrary = () => {
       if (clearing || deletingId !== null || library.length === 0) return;
-      const pairs = new Map();
+      const names = new Map();
       for (const asset of library) {
         for (const entry of state.references[asset.id] ?? []) {
-          pairs.set(`${labelFor(entry.skinId)} · ${entry.key}`, true);
+          names.set(`${labelFor(entry.skinId)} · ${entry.key}`, true);
+        }
+        for (const label of previewRefsFor(asset.id)) {
+          names.set(label, true);
         }
       }
-      const names = [...pairs.keys()].join("、");
+      const listed = [...names.keys()].join("、");
       requestConfirm(tr("personalization.library.clearConfirm", {
         count: library.length,
-        names: names === "" ? "—" : names,
+        names: listed === "" ? "—" : listed,
       }), async () => {
         setClearing(true);
         try {
-          for (const asset of [...library]) {
-            const result = await configClient.deleteImage(asset.id);
-            if (result.error) {
-              // Stop at the first failure and surface what is left (L8).
-              setMessage(tr("personalization.library.clearFailed"));
-              void configClient.refetch();
-              return;
-            }
+          // One atomic op (ADR-0015): a single PATCH, a single commit —
+          // nothing stops halfway, every affected field falls back at once.
+          const result = await configClient.clearLibrary();
+          if (result.error) {
+            setMessage(tr("personalization.library.clearFailed"));
+            void configClient.refetch();
           }
         } catch {
           setMessage(tr("personalization.library.clearFailed"));
@@ -367,7 +380,12 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
                     );
                   }
                 }
-                if (lastAssetId !== null) onValue(lastAssetId); // land on the newest upload
+                // The auto-applied preview saves at once (ADR-0015 rider ②):
+                // an upload outcome must not wait out the debounce window.
+                if (lastAssetId !== null) {
+                  onValue(lastAssetId); // land on the newest upload
+                  await configClient.flushNow();
+                }
                 setMessage(firstError === null
                   ? null
                   : ok === 0
@@ -382,6 +400,7 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
               if (result.asset) {
                 setMessage(null);
                 onValue(result.asset.id);
+                await configClient.flushNow(); // rider ②: save the upload at once
               } else {
                 // Surface WHY the upload was rejected (server code → localized
                 // reason; unmapped codes fall back to the generic copy). The
@@ -540,6 +559,19 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
       statusCluster.push(jsx("div", { key: "save-error", className: "dsh-skins-pz-status dsh-skins-pz-warn", children: [
         jsx("span", { children: tr("personalization.saveFailed") }),
         jsx("div", { className: "dsh-skins-pz-muted", children: state.lastFlushError }),
+      ] }));
+    }
+    // Dangling-preview reversions (ADR-0015): the client excised a preview
+    // whose asset was deleted elsewhere and reset the field to factory — the
+    // notice NAMES what fell back instead of leaving a silent change. Reuses
+    // the transient footer strip slot and existing classes (zero new CSS).
+    if (Array.isArray(state.revertedFields) && state.revertedFields.length > 0) {
+      statusCluster.push(jsx("div", { key: "reverted", className: "dsh-skins-pz-status", children: [
+        jsx("div", { children: tr("personalization.fieldReverted") }),
+        jsx("div", {
+          className: "dsh-skins-pz-muted",
+          children: state.revertedFields.map((entry) => `${labelFor(entry.skinId)} · ${entry.key}`).join("、"),
+        }),
       ] }));
     }
 
