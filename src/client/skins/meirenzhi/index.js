@@ -23,6 +23,7 @@ import {
   WALLPAPER_ZILING,
 } from "./wallpapers.js";
 import { frostFamilyCss } from "../frost-family.js";
+import { createProjection } from "../translucency.js";
 
 const SCOPE = "body[data-dsh-meirenzhi-skin]";
 
@@ -70,16 +71,6 @@ const CSS = [
   frostFamilyCss(SCOPE, TINTS),
 ].join("\n");
 
-/** Panel glass: warm mist white (light) / deep night blue-violet (dark). */
-function panelBase(mode, alpha) {
-  return mode === "light" ? `rgba(250, 249, 246, ${alpha})` : `rgba(18, 18, 26, ${alpha})`;
-}
-
-// 随动族 rgb（面板底 / 纱 / 浮层），固定两位小数 alpha 由 project() 计算。
-const BASE_RGB = { light: "250, 249, 246", dark: "18, 18, 26" };
-
-const GLASS_RULE = `${SCOPE} [id="root"]{backdrop-filter:blur(var(--dsh-mrz-glass-blur,0px))}`;
-
 const SLOGANS = { zh: "风起凡尘 · 红颜问道", en: "From mortal dust, immortals bloom" };
 
 const builtinAssets = {
@@ -92,24 +83,25 @@ const builtinAssets = {
 };
 
 /**
- * 投影数学（tgcf 同构二次曲线；模糊铰链锚 P=35 = catalog web 出厂默认，
- * ADR-0010）：一个通透度旋钮联动面板底色（α 线性）、壁纸纱（30·t²）与
- * 模糊（P≤35 恒 0，之上 12·((t−0.35)/0.65)²——与 legacy 皮肤的 (P−55)/45
- * 铰链同构，每套皮肤在自己的出厂点零模糊）；P=0 纯壁纸完全可见，P=100
- * 随动族钳 1.00、模糊到顶 12px。侧栏增量沿用 ruling #15 惯例（亮 +0.05 /
- * 暗 +0.17）；composer/selector 沿 tgcf 结构（亮 +0.05/暗 +0.10、亮 +0/暗 +0.05）。
+ * 投影声明表（ADR-0013：机制住 ../translucency.js，本皮肤只持参数）。
+ * 出厂锚 35（= catalog web 出厂默认，ADR-0010）：随动重基线与模糊铰链
+ * 共用——锚点处壁纸零模糊；t+offset 旧写法已展开为 pivot 形式的烘焙点
+ * （baked = 35 + 100·offset）。纱走 overlay 通道（30·t²，三位小数），
+ * 壁纸为纯 assets 模型；desktop 出厂 66 属 catalog 默认层，投影不感知
+ * profile。
  */
-function project(values, assets) {
-  const t = Math.min(1, Math.max(0, values.panelOpacity / 100));
-  const a2 = (x) => Math.min(1, x).toFixed(2);
-
-  const riding = {
-    "--dsw-alias-bg-base": { light: t, dark: t },
-    "--dsw-specific-sidebar-fill": { light: t + 0.05, dark: t + 0.17 },
-    "--dsw-alias-bg-module-platform": { light: t, dark: t + 0.05 },
-    "--dsw-specific-input-major": { light: t + 0.05, dark: t + 0.1 },
-  };
-  const tokenOverrides = {
+const table = {
+  bodyAttribute: "dshMeirenzhiSkin",
+  titleBrand: "美人志",
+  favicon: { href: MARK_URL, mime: "image/webp" },
+  anchor: 35,
+  riding: {
+    "--dsw-alias-bg-base": { light: ["250, 249, 246", 35], dark: ["18, 18, 26", 35] },
+    "--dsw-specific-sidebar-fill": { light: ["250, 249, 246", 40], dark: ["18, 18, 26", 52] },
+    "--dsw-alias-bg-module-platform": { light: ["250, 249, 246", 35], dark: ["18, 18, 26", 40] },
+    "--dsw-specific-input-major": { light: ["250, 249, 246", 40], dark: ["18, 18, 26", 45] },
+  },
+  constantTokens: {
     // 常量族：品牌绯红 × 鎏金、浮层「较实」、控件态、导航态（设计定案 §视觉系统）。
     // 用户气泡（产品主人裁决，参照 openbmc/uefi 双 token 结构）：浅色态=品牌
     // 绯红轻透纱（深字，融进暖雾白面板）；深色态=玄夜面板族较实底（亮字）。
@@ -125,41 +117,16 @@ function project(values, assets) {
     "--dsw-specific-sidebar-nav-item-active": { light: "rgba(250, 249, 246, 0.9)", dark: "rgba(28, 28, 40, 0.9)" },
     "--dsw-specific-bubble": { light: "rgba(184, 67, 63, 0.10)", dark: "rgba(24, 24, 34, 0.90)" },
     "--dsw-specific-bubble-highlight": { light: "rgba(184, 67, 63, 0.18)", dark: "rgba(40, 40, 56, 0.92)" },
-  };
-  for (const [key, modes] of Object.entries(riding)) {
-    tokenOverrides[key] = {
-      light: `rgba(${BASE_RGB.light}, ${a2(modes.light)})`,
-      dark: `rgba(${BASE_RGB.dark}, ${a2(modes.dark)})`,
-    };
-  }
+  },
+  scrim: { kind: "overlay", coefficient: 30, light: "252, 250, 246", dark: "16, 16, 26" },
+  blur: { max: 12 },
+  glassVar: "--dsh-mrz-glass-blur",
+  desktopBlur: { rate: 55, dark: "boost" },
+  wallpaper: { kind: "assets" },
+  staticCss: CSS,
+};
 
-  // 纱：单一 scrim 值驱动明暗两层；底色分暖雾白 / 玄夜。
-  const s = (Math.round(30 * t * t) / 100).toFixed(3);
-  const scrimLight = `linear-gradient(rgba(252, 250, 246, ${s}) 0%, rgba(252, 250, 246, ${s}) 100%)`;
-  const scrimDark = `linear-gradient(rgba(16, 16, 26, ${s}) 0%, rgba(16, 16, 26, ${s}) 100%)`;
-  const blurPx = t > 0.35 ? Math.round(12 * ((t - 0.35) / 0.65) ** 2) : 0;
-  const desktopBlurPx = Math.min(24, blurPx + values.panelOpacity / 55);
-
-  // builtin/user 引用已由 projector/assetResolver 解析成 URL，这里统一消费。
-  const wallpaperUrl = assets?.wallpaper?.url ?? null;
-  const imageLight = wallpaperUrl === null ? null : `url("${wallpaperUrl}")`;
-  const imageDark = wallpaperUrl === null ? null : `url("${wallpaperUrl}")`;
-
-  return {
-    bodyAttribute: "dshMeirenzhiSkin",
-    slogans: values.slogan ?? SLOGANS,
-    titleBrand: "美人志",
-    favicon: { href: MARK_URL, mime: "image/webp" },
-    backdrop: {
-      imageLight, imageDark, overlayLight: scrimLight, overlayDark: scrimDark, blur: blurPx,
-      desktopBlur: { light: desktopBlurPx, dark: desktopBlurPx },
-    },
-    tokenOverrides,
-    cssVariables: blurPx > 0 ? { "--dsh-mrz-glass-blur": { light: `${blurPx}px`, dark: `${blurPx}px` } } : null,
-    staticCss: blurPx > 0 ? CSS + "\n" + GLASS_RULE : CSS,
-    decorations: null,
-  };
-}
+const project = createProjection(table);
 
 export function createMeirenzhiSkin(jsxRuntime) {
   const { jsx } = jsxRuntime;

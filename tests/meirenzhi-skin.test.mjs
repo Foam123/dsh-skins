@@ -105,10 +105,16 @@ test("project at P=0: pure wallpaper, no blur layer; at P=100 alphas clamp to 1.
   assert.deepEqual(full.backdrop.desktopBlur, { light: 12 + 100 / 55, dark: 12 + 100 / 55 });
 });
 
-test("project falls back to factory slogan when the field is missing", () => {
+test("project carries no slogan fallback — mergeValues owns the default (B14, ADR-0014)", async () => {
   const fx = skin.project(
     { wallpaper: "builtin:meirenzhi:yuntai", panelOpacity: 35 },
     { wallpaper: { url: WALLPAPER_URL } },
   );
-  assert.deepEqual(fx.slogans, { zh: "风起凡尘 · 红颜问道", en: "From mortal dust, immortals bloom" });
+  // B14 删除了 ?? SLOGANS 兜底：生产路径 mergeValues 恒供 catalog 默认值，
+  // 此处为死代码路径断言（G0 例外已留痕于实施计划 Task 5 Step 2）。
+  assert.equal(fx.slogans, undefined, "draft leaves slogans undefined");
+  const { normalizeEffects } = await import("../src/client/personalization/projector.js");
+  const normalized = normalizeEffects(fx);
+  assert.notEqual(normalized, null);
+  assert.equal(normalized.slogans, null, "normalizeEffects turns missing slogans into null");
 });
