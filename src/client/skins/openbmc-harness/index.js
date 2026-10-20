@@ -1731,13 +1731,6 @@ export function createOpenBmcHarness(jsxRuntime) {
 
   const artLayer = BACKGROUND_ART === "" ? "" : `, url(${BACKGROUND_ART})`;
 
-  /** 亮色遮罩：极薄白纱（面板承担可读性，遮罩只做轻微提亮） */
-  const SCRIM_LIGHT =
-    "linear-gradient(rgba(247, 250, 252, 0.15) 0%, rgba(240, 246, 250, 0.28) 100%)" + artLayer;
-  /** 暗色遮罩：极薄夜纱（双翼金光最大化透出，冰窟氛围全开） */
-  const SCRIM_DARK =
-    "linear-gradient(rgba(7, 14, 22, 0.10) 0%, rgba(4, 9, 14, 0.24) 100%)" + artLayer;
-
   /** 占位背景 · 亮色：左上品牌蓝光晕 + 右下品牌绿光晕 */
   const PLACEHOLDER_LIGHT =
     "radial-gradient(1100px 750px at 18% 0%, rgba(0, 176, 218, 0.10), transparent 60%)," +
@@ -1754,8 +1747,6 @@ export function createOpenBmcHarness(jsxRuntime) {
    * 壁纸 ::before 模糊与面板霜层同步增强）；desktop 出厂 66 属 catalog
    * 默认层，投影不感知 profile。
    * ================================================================ */
-  const SLOGANS = { zh: "察于未萌 · 治于未乱", en: "Govern before the storm" };
-
   const table = {
     bodyAttribute: "dshOpenbmcSkin",
     titleBrand: "OpenBMC Studio",
@@ -1792,19 +1783,8 @@ export function createOpenBmcHarness(jsxRuntime) {
       zh: "冰绡叠浪 · 风雷入画 · 缥碧盈卷",
       en: "Ice-silk waves · storm-wing backdrop · ice-blue palette",
     },
-    bodyAttr: "dshOpenbmcSkin",
     Mark: OpenBmcMark,
     Name: OpenBmcName,
-    favicon: FAVICON_DATA_URL,
-    faviconMime: FAVICON_MIME,
-    title: "OpenBMC Studio",
-    css: CSS,
-    art: BACKGROUND_ART,
-    scrimLight: SCRIM_LIGHT,
-    scrimDark: SCRIM_DARK,
-    placeholderLight: PLACEHOLDER_LIGHT,
-    placeholderDark: PLACEHOLDER_DARK,
-    slogans: SLOGANS,
     builtinAssets: {
       // ADR-0014（B15）：显式声明，替代 index.js 的 legacy 合成补底。
       art: { mime: "image/webp", url: BACKGROUND_ART },

@@ -1102,13 +1102,6 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] :is([class*="oRe1gG_bubble"], [c
 
   const artLayer = BACKGROUND_ART === "" ? "" : `, url(${BACKGROUND_ART})`;
 
-  /** 亮色遮罩：极薄紫纱（面板承担可读性，鎏金大面积透出） */
-  const SCRIM_LIGHT =
-    "linear-gradient(rgba(248, 247, 255, 0.10) 0%, rgba(238, 234, 255, 0.22) 100%)" + artLayer;
-  /** 暗色遮罩：极薄靛纱（金线夜光最大化透出） */
-  const SCRIM_DARK =
-    "linear-gradient(rgba(23, 18, 45, 0.08) 0%, rgba(16, 12, 34, 0.20) 100%)" + artLayer;
-
   /* ================================================================
    * 个性化投影（ADR-0004 起；ADR-0013 起机制收拢至 ../translucency.js
    * 通透度投影核，本皮肤只持声明表）：slogan + panelOpacity 单旋钮。
@@ -1116,8 +1109,6 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] :is([class*="oRe1gG_bubble"], [c
    * 壁纸 ::before 模糊与面板霜层同步增强）；desktop 出厂 66 属 catalog
    * 默认层，投影不感知 profile。
    * ================================================================ */
-  const SLOGANS = { zh: "启于固件 · 行于万象", en: "Boot before everything" };
-
   const table = {
     bodyAttribute: "dshUefiHarness",
     titleBrand: "UEFI Studio",
@@ -1153,17 +1144,8 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] :is([class*="oRe1gG_bubble"], [c
       zh: "紫电初醒 · 流霞渐染 · 绀青成韵",
       en: "Violet spark · gilded backdrop · violet-blue palette",
     },
-    bodyAttr: "dshUefiHarness",
     Mark: UefiMark,
     Name: UefiName,
-    favicon,
-    faviconMime: "image/svg+xml",
-    title: "UEFI Studio",
-    css,
-    art: BACKGROUND_ART,
-    scrimLight: SCRIM_LIGHT,
-    scrimDark: SCRIM_DARK,
-    slogans: SLOGANS,
     builtinAssets: {
       // ADR-0014（B15）：显式声明，替代 index.js 的 legacy 合成补底。
       art: { mime: "image/webp", url: BACKGROUND_ART },

@@ -28,6 +28,7 @@
 
 ```js
 import { frostFamilyCss } from "../frost-family.js";
+import { createProjection, ridingDecl } from "../translucency.js";
 
 const SCOPE = "body[data-dsh-my-skin]"; // = bodyAttribute 的 dataset 形式：dshMySkin → data-dsh-my-skin
 
@@ -35,36 +36,42 @@ export function createMySkin({ jsx }) {
   function Mark({ size = 24 }) { /* 返回图标 */ }
   function Name() { /* 返回品牌名 */ }
 
-  const css = `${SCOPE} { /* DSH tokens */ }`;
+  // 随动族（ADR-0013）：值 = 出厂锚点处的烘焙读数，CSS 块内同名声明一律经
+  // ridingDecl 插值生成（模板持排版、表持值——文件内不再有第二份字面量）。
+  const RIDING = { "--dsw-alias-bg-base": { light: ["R, G, B", 35], dark: ["R, G, B", 35] } };
+  const SPEC = { anchor: 35, riding: RIDING };
+
+  const css = `${SCOPE} {
+  ${ridingDecl(SPEC, "--dsw-alias-bg-base", "light")}
+${SCOPE}[data-ds-dark-theme] {
+  ${ridingDecl(SPEC, "--dsw-alias-bg-base", "dark")}
+}`;
   // 浮层毛玻璃家族段（菜单三件套 + 冻层全段）一行取得（ADR-0012）；
   // TINTS = { frost: { light, dark }, menu: { light, dark } }，tint 自持。
   const TINTS = { frost: { light: "R, G, B", dark: "R, G, B" }, menu: { light: "R, G, B", dark: "R, G, B" } };
   const fullCss = `${css}\n${frostFamilyCss(SCOPE, TINTS)}`;
 
-  // project 必须提供：values = catalog 字段当前值（wallpaper / slogan /
-  // panelOpacity 标准字段集，ADR-0004），assets = 已解析的图片资产
-  //（{ <fieldKey>: { url, mime } }）。默认投影必须与烘焙串逐字节相等
-  //（ADR-0004 不变式）。
-  function project(values, assets) {
-    return {
-      bodyAttribute: "dshMySkin",
-      slogans: values.slogan ?? { zh: "中文标语", en: "English slogan" },
-      titleBrand: "My Skin",
-      favicon: { href: "data:image/svg+xml,...", mime: "image/svg+xml" },
-      backdrop: {
-        imageLight: assets?.wallpaper?.url ? `url("${assets.wallpaper.url}")` : null,
-        imageDark: assets?.wallpaper?.url ? `url("${assets.wallpaper.url}")` : null,
-        overlayLight: null,
-        overlayDark: null,
-        blur: 0,
-        desktopBlur: null,
-      },
-      tokenOverrides: null,
-      cssVariables: null,
-      staticCss: fullCss,
-      decorations: null,
-    };
-  }
+  // 皮肤声明表（ADR-0013）：投影机制住 ../translucency.js 通透度投影核，
+  // 皮肤只持参数。出厂锚 35 同时是随动重基线与模糊铰链的原点（GLOSSARY
+  // 「出厂锚」）；desktop 出厂 66 属本文件下方 catalog 的 profile 默认层，
+  // 投影不感知 profile。表形状的权威定义见 translucency.js 头注释与
+  // ADR-0013；纱两方言（overlay / baked-gradient）与壁纸上纱模式
+  // （assets / legacy-baked + sentinel + placeholder）均为表内声明。
+  const table = {
+    bodyAttribute: "dshMySkin",
+    titleBrand: "My Skin",
+    favicon: { href: "data:image/svg+xml,...", mime: "image/svg+xml" },
+    anchor: 35,
+    riding: RIDING,
+    constantTokens: null, // 或 { token: { light, dark } } 常量族（meirenzhi 同款）
+    scrim: { kind: "overlay", coefficient: 30, light: "R, G, B", dark: "R, G, B" },
+    blur: { max: 12 },
+    glassVar: "--dsh-my-skin-glass-blur",
+    desktopBlur: { rate: 55, dark: "boost" }, // 增益率与出厂锚是两个概念
+    wallpaper: { kind: "assets" },
+    staticCss: fullCss,
+  };
+  const project = createProjection(table); // 出厂锚点投影与烘焙串逐字节相等（ADR-0004 不变式，tests/translucency-contract 钉住）
 
   return {
     id: "my-skin",
@@ -72,6 +79,7 @@ export function createMySkin({ jsx }) {
     description: { zh: "一句话描述", en: "One-line description" },
     Mark,
     Name,
+    builtinAssets: { /* catalog 声明的内置资产：key → { mime, url }；三皮均显式声明（B15） */ },
     project,
   };
 }
@@ -81,13 +89,14 @@ export function createMySkin({ jsx }) {
 
 1. 在 `src/client/index.js` 中加入对应的 import 与 `runtime.register(...)`；
 2. 在 `src/shared/personalization/catalog.js` 中登记皮肤的字段声明（`fields[]` 与内置资产），即可自动获得个性化面板——支持 `text / color / image / select / range` 五类字段、`single / locale / colorScheme` 三种值作用域；
-3. **必须**提供 `project(values, assets)` 纯函数（SkinEffects 形状见 `src/client/personalization/projector.js` 的 `normalizeEffects`）：无 `project` 的目录皮肤经三层回退 fail closed、**永不挂载**——ADR-0004 已删除 legacy 投影通道，不存在任何兜底适配器；
+3. **必须**以声明表 + `createProjection(table)` 产出 `project(values, assets)`（表形状见 `src/client/skins/translucency.js`，SkinEffects 形状见 `src/client/personalization/projector.js` 的 `normalizeEffects`）：无 `project` 的目录皮肤经三层回退 fail closed、**永不挂载**——ADR-0004 已删除 legacy 投影通道，不存在任何兜底适配器；
+3a. 工厂 return 的生产面是**恰好七字段** `{ id, label, description, Mark, Name, project, builtinAssets }`（ADR-0014）：`runtime.register` 对集合外字段直接抛错，interface 变宽必须显式改 `PRODUCTION_FIELDS`；slogan 默认单源 catalog（B14），皮肤不再携带 `SLOGANS` 常量或 `??` 兜底；
 4. 删除皮肤时反向操作；
 5. 保留 ID `official` 与兼容别名 `default`，不要用于扩展皮肤。
 
 `label` 与 `description` 接受语言中立的字符串（如品牌名）或 `{ zh, en }` 映射，解析顺序为当前语言 → en → zh。皮肤卡片与 `__DSH_SKINS__.list()` 始终返回解析后的字符串，中英词典由 `tests/dicts.test.mjs` 强制键与占位符双向对齐。
 
-`title`（可选）改写浏览器标签页的品牌段，接受与 `label` 相同的字符串或 `{ zh, en }` 形式。官方 `DocumentTitle` 投影器会把标签页维护为「会话名 — DeepSeek Harness」，皮肤挂载期间只替换其中的品牌段、保留会话名；选择官方外观或插件卸载时换回官方品牌。
+标签页品牌段由声明表的 `titleBrand` 驱动（经投影结果的 `effects.titleBrand` 生效，ADR-0013），接受与 `label` 相同的字符串或 `{ zh, en }` 形式。官方 `DocumentTitle` 投影器会把标签页维护为「会话名 — DeepSeek Harness」，皮肤挂载期间只替换其中的品牌段、保留会话名；选择官方外观或插件卸载时换回官方品牌。
 
 每个皮肤目录自持品牌标识、favicon、CSS、背景与标语，不从其他皮肤目录导入视觉资源；`runtime.js` 与 `sidebar-switcher.js` 只承载通用机制。浮层毛玻璃等家族级机制住 `src/client/skins/` 平级共享模块（如 `frost-family.js`），tint 色值与品牌资源仍由各皮自持（ADR-0012）。
 

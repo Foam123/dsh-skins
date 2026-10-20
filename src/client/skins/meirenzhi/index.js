@@ -71,8 +71,6 @@ const CSS = [
   frostFamilyCss(SCOPE, TINTS),
 ].join("\n");
 
-const SLOGANS = { zh: "风起凡尘 · 红颜问道", en: "From mortal dust, immortals bloom" };
-
 const builtinAssets = {
   yuntai: { mime: "image/webp", url: WALLPAPER_YUNTAI },
   mupeiling: { mime: "image/webp", url: WALLPAPER_MUPEILING },
@@ -181,21 +179,8 @@ export function createMeirenzhiSkin(jsxRuntime) {
       zh: "云鬓花颜 · 霞衣夜月 · 凡尘问道",
       en: "Moonlit silks · crimson & gold · mortal path",
     },
-    bodyAttr: "dshMeirenzhiSkin",
     Mark: MeiRenZhiMark,
     Name: MeiRenZhiName,
-    favicon: MARK_URL,
-    faviconMime: "image/webp",
-    title: "美人志",
-    css: CSS,
-    // Legacy fallback path (projector layer-3 safety net) stays coherent,
-    // mirroring the tgcf pattern: same builtin art as the factory wallpaper.
-    art: "",
-    scrimLight: `url("${WALLPAPER_YUNTAI}")`,
-    scrimDark: `url("${WALLPAPER_YUNTAI}")`,
-    placeholderLight: `url("${WALLPAPER_YUNTAI}")`,
-    placeholderDark: `url("${WALLPAPER_YUNTAI}")`,
-    slogans: SLOGANS,
     builtinAssets,
     project,
   };

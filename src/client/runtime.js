@@ -98,6 +98,14 @@ function buildShellAlignmentCss(bodyAttribute, opaqueFills, backdrop) {
 
 export const shellAlignment = { parseRgbaChannels, buildShellAlignmentCss };
 
+/**
+ * 生产面（ADR-0014）：皮肤模块 interface 的全部字段，恰为生产代码消费的
+ * 七项。interface 变宽必须显式动这里——register 对集合外字段 fail closed。
+ */
+export const PRODUCTION_FIELDS = new Set([
+  "id", "label", "description", "Mark", "Name", "project", "builtinAssets",
+]);
+
 export function createSkinRuntime({ profile = "web" } = {}) {
   const skins = new Map();
   const order = [];
@@ -112,6 +120,11 @@ export function createSkinRuntime({ profile = "web" } = {}) {
     }
     if (skin.id === OFFICIAL_SKIN_ID || skin.id === LEGACY_OFFICIAL_ALIAS) {
       throw new Error(`[dsh-skins] skin id "${skin.id}" is reserved for the official appearance`);
+    }
+    for (const key of Object.keys(skin)) {
+      if (!PRODUCTION_FIELDS.has(key)) {
+        throw new Error(`[dsh-skins] unknown skin field "${key}" on "${skin.id}" — the skin interface is exactly PRODUCTION_FIELDS (ADR-0014)`);
+      }
     }
     if (skins.has(skin.id)) throw new Error(`[dsh-skins] duplicate skin id "${skin.id}"`);
     skins.set(skin.id, skin);

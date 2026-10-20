@@ -247,10 +247,11 @@ test("legacy skin catalog defaults are same-source with the factories' static di
   const { createUefiHarness } = await import("../src/client/skins/uefi-harness/index.js");
   const stubJsx = { jsx: () => null };
   for (const [skinId, factory] of [["openbmc", createOpenBmcHarness], ["uefi-harness", createUefiHarness]]) {
-    const skin = factory(stubJsx);
+    factory(stubJsx); // 工厂可构建（生产面七字段经 runtime-effects 钉住）
     const slogan = getField(skinId, "slogan");
     assert.notEqual(slogan, null, `${skinId} must declare a slogan field`);
-    assert.deepEqual(slogan.default, skin.slogans, `${skinId} slogan default must be same-source with the factory's static slogans`);
+    // B14（ADR-0014）：slogan 默认单源 catalog，工厂不再携带静态 slogans 字段——
+    // 「same-source」由单源构造承担，无第二份可比对（G0 例外留痕于实施计划 Task 7）。
     assert.equal(slogan.maxLength, 40);
     const panelOpacity = getField(skinId, "panelOpacity");
     assert.notEqual(panelOpacity, null, `${skinId} must declare a panelOpacity field`);

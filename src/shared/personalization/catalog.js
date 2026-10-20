@@ -66,12 +66,13 @@ const WALLPAPER_FIELD = {
 
 export const SKINS = {
   // ADR-0004 (reversing design §9a): every catalog skin declares the same
-  // standard field set. The legacy skins' catalog slogan defaults are
-  // same-source with their factories' static `slogans`, and panelOpacity
-  // default 55 anchors the derived projection to the baked alpha strings —
-  // the byte-equivalence invariant is pinned by the projector tests.
-  // Legacy wallpaper semantics (scrim never applies to user images,
-  // placeholder branch) live inside each skin's project() branches.
+  // standard field set. Slogan defaults are single-sourced here (ADR-0014/B14)
+  // — the factories carry no static copies. panelOpacity defaults are each
+  // skin's 出厂锚 (GLOSSARY; 55/55/35 web, 66 desktop): they anchor the riding
+  // rebase and blur hinge inside skins/translucency.js, and the byte-equality
+  // at the anchor is pinned by tests/translucency-contract.test.mjs. Legacy
+  // wallpaper semantics (scrim never applies to user images, placeholder
+  // branch) live in the translucency projection kernel's wallpaper branches.
   // openbmc（出厂皮肤，v1.0.6 起注册顺序第一位，见 client/index.js）
   openbmc: {
     builtinAssets: { art: { mime: "image/webp", labelKey: "personalization.openbmc.art" } },

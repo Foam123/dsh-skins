@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSkinRuntime, shellAlignment } from "../src/client/runtime.js";
+import { createSkinRuntime, shellAlignment, PRODUCTION_FIELDS } from "../src/client/runtime.js";
 import { createOpenBmcHarness } from "../src/client/skins/openbmc-harness/index.js";
 import { createMeirenzhiSkin } from "../src/client/skins/meirenzhi/index.js";
 
@@ -131,19 +131,10 @@ function personalizationFor(skinsById) {
   };
 }
 
-function withLegacyAssets(skin) {
-  // Mirrors src/client/index.js: legacy factories get a builtin art entry so
-  // their default ref resolves.
-  if (skin.builtinAssets === undefined) {
-    skin.builtinAssets = { art: { mime: "image/webp", url: skin.art !== "" ? skin.art : skin.placeholderLight } };
-  }
-  return skin;
-}
-
 function bootMeirenzhi(dom) {
   const runtime = createSkinRuntime();
   const meirenzhi = createMeirenzhiSkin(stubJsx);
-  const openbmc = withLegacyAssets(createOpenBmcHarness(stubJsx));
+  const openbmc = createOpenBmcHarness(stubJsx); // 工厂自带 builtinAssets（ADR-0014/B15）
   runtime.register(openbmc);
   runtime.register(meirenzhi);
   const ctx = makeCtx();
@@ -158,7 +149,7 @@ function bootMeirenzhi(dom) {
 function bootOpenBmcWithDesktopBlur(desktopBlur) {
   const dom = installDom();
   const runtime = createSkinRuntime();
-  const openbmc = withLegacyAssets(createOpenBmcHarness(stubJsx));
+  const openbmc = createOpenBmcHarness(stubJsx); // 工厂自带 builtinAssets（ADR-0014/B15）
   const project = openbmc.project;
   openbmc.project = (values, assets) => {
     const effects = project(values, assets);
@@ -321,7 +312,7 @@ test("N1: selecting a skin that cannot project keeps the current skin", () => {
   const dom = installDom();
   const runtime = createSkinRuntime();
   const good = createMeirenzhiSkin(stubJsx);
-  const broken = withLegacyAssets(createOpenBmcHarness(stubJsx));
+  const broken = createOpenBmcHarness(stubJsx);
   broken.project = () => { throw new Error("always broken"); };
   runtime.register(broken);
   runtime.register(good);
@@ -345,7 +336,7 @@ test("N1: selecting a skin that cannot project keeps the current skin", () => {
 function bootWithStoredChoice(stored) {
   const dom = installDom();
   const runtime = createSkinRuntime();
-  const openbmc = withLegacyAssets(createOpenBmcHarness(stubJsx));
+  const openbmc = createOpenBmcHarness(stubJsx); // 工厂自带 builtinAssets（ADR-0014/B15）
   const meirenzhi = createMeirenzhiSkin(stubJsx);
   runtime.register(openbmc);
   runtime.register(meirenzhi);
@@ -389,4 +380,33 @@ test("stored selections survive the factory-skin switch (resolveSelectedId contr
     dispose();
     assert.equal(dom.document.body.dataset.dshOpenbmcSkin, undefined, "dispose removes the scope attr");
   }
+});
+
+// ---- production surface (ADR-0014) -----------------------------------------
+
+test("register fails closed on unknown fields — the surface is exactly seven (ADR-0014)", () => {
+  const runtime = createSkinRuntime();
+  const skin = createOpenBmcHarness(stubJsx);
+  const fat = { ...skin, css: "/* legacy packaging field */" };
+  assert.throws(() => runtime.register(fat), /unknown skin field "css"/);
+});
+
+test("a minimal seven-field skin registers (ADR-0014)", () => {
+  const runtime = createSkinRuntime();
+  runtime.register({
+    id: "minimal",
+    label: "Minimal",
+    description: { zh: "最小", en: "Minimal" },
+    Mark: () => null,
+    Name: () => null,
+    project: () => ({ bodyAttribute: "minimalSkin" }),
+    builtinAssets: {},
+  });
+  assert.deepEqual(runtime.list().map((s) => s.id), ["minimal"]);
+});
+
+test("PRODUCTION_FIELDS pins the whitelist content (ADR-0014)", () => {
+  assert.deepEqual([...PRODUCTION_FIELDS].sort(), [
+    "Mark", "Name", "builtinAssets", "description", "id", "label", "project",
+  ]);
 });

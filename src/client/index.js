@@ -27,15 +27,7 @@ window.__ModuleLoader__.load({
     // users with no stored choice (v1.0.6 起 openbmc 领头；v1.4.0 起
     // openbmc → uefi-harness → meirenzhi，tgcf 皮肤移除).
     for (const factory of [createOpenBmcHarness, createUefiHarness, createMeirenzhiSkin]) {
-      const skin = factory(jsxRuntime);
-      if (skin.builtinAssets === undefined) {
-        // Legacy skins resolve their builtin art ref through their own baked
-        // strings (the projector's legacy adapter never needs the URL, but
-        // resolution failure must not be a pipeline failure).
-        skin.builtinAssets = {
-          art: { mime: "image/webp", url: skin.art !== "" ? skin.art : skin.placeholderLight },
-        };
-      }
+      const skin = factory(jsxRuntime); // 工厂自带 builtinAssets（ADR-0014/B15，合成补底已删）
       skinById.set(skin.id, skin);
       runtime.register(skin);
     }
