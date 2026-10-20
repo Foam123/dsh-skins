@@ -72,7 +72,7 @@
     "verify:readme": "node scripts/verify-readme-pairing.mjs",
     "verify:bundle": "node scripts/verify-bundle-guard.mjs",
     "verify:hooks": "node scripts/verify-upstream-hooks.mjs",
-    "check": "pnpm run check:lockfile && pnpm run build && node --check lib/client.js && node --check lib/index.js && pnpm run test && pnpm run verify:readme && pnpm run verify:bundle && pnpm run verify:hooks"
+    "check": "pnpm run check:lockfile && pnpm run build && node --check lib/client.js && node --check lib/index.js && pnpm run test && pnpm run verify:readme && pnpm run verify:bundle && pnpm run verify:hooks && git diff --exit-code -- lib/index.js lib/client.js"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
