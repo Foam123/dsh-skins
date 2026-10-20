@@ -128,6 +128,7 @@ dsh plugin --profile web add link:<本仓库路径>
 3. 提交源码与重新生成的 `lib/` 产物，打 `vX.Y.Z` tag 并推送；Release workflow 经 npm OIDC Trusted Publishing 发布；
 4. **workflow 全绿 ≠ 已上架**：npm 对 provenance 发布有 staged 暂存窗口（scoped 包实测可达约 1 小时），期间 per-version 文档 404、`dist-tags` 停在旧版。用 `npm view <pkg>@<version> --registry=https://registry.npmjs.org/` 每 2 分钟轮询到 200 为止；窗口内重推同一 tag 必撞 `409 Cannot publish over previously staged version`，且 workflow 失败护栏会删除远端 tag；
 5. 三键核验齐全再宣布发版成功：per-version 文档 200、`dist-tags.latest` 推进、packument `time` 字段推进。
+6. 开发期间凡触碰 `src/` 的 checkpoint 必须一并提交重建后的 `lib/`（本仓库 lib 随源码入库；只改测试/文档的 checkpoint 无需构建）——中途快照 src/lib 不自洽，会让旧 commit 不经 build 的直接运行用上旧 lib（2026-10-20 实现评审 R2 裁定）。
 
 ## 控制台调试 API
 
