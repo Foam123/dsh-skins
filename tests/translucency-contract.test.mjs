@@ -17,9 +17,18 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createOpenBmcHarness } from "../src/client/skins/openbmc-harness/index.js";
 import { createUefiHarness } from "../src/client/skins/uefi-harness/index.js";
 import { createMeirenzhiSkin } from "../src/client/skins/meirenzhi/index.js";
+
+const SRC = {
+  openbmc: fileURLToPath(new URL("../src/client/skins/openbmc-harness/index.js", import.meta.url)),
+  uefi: fileURLToPath(new URL("../src/client/skins/uefi-harness/index.js", import.meta.url)),
+};
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const countMatches = (haystack, pattern) => (haystack.match(new RegExp(pattern, "g")) ?? []).length;
 
 const GOLD = {
   openbmc: {
@@ -265,3 +274,15 @@ for (const [skinId, spec] of Object.entries(GOLD)) {
     }
   });
 }
+
+test("openbmc source: riding declarations single-sourced (16 interpolations, zero hand-written)", () => {
+  const src = readFileSync(SRC.openbmc, "utf8");
+  assert.equal(countMatches(src, "\\$\\{ridingDecl\\("), 16, "exactly 16 ridingDecl interpolations");
+  for (const token of Object.keys(GOLD.openbmc.riding)) {
+    assert.equal(
+      countMatches(src, escapeRe(`${token}: rgba(`)),
+      0,
+      `${token} must not appear as a hand-written rgba declaration (14 non-riding neighbours are exempt by full-name match)`,
+    );
+  }
+});

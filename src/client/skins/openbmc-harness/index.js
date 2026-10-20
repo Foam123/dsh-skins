@@ -1,6 +1,6 @@
 /** Independent OpenBMC Studio skin (id: openbmc). */
-import { resolveImageRef } from "../../../shared/personalization/catalog.js";
 import { frostFamilyCss } from "../frost-family.js";
+import { createProjection, ridingDecl } from "../translucency.js";
 
 export function createOpenBmcHarness(jsxRuntime) {
   const { jsx } = jsxRuntime;
@@ -146,6 +146,21 @@ export function createOpenBmcHarness(jsxRuntime) {
     frost: { light: "247, 250, 252", dark: "12, 26, 38" },
     menu: { light: "242, 247, 251", dark: "14, 33, 48" },
   };
+
+  // 随动族（ADR-0013）：值即出厂锚点 55 处的烘焙读数，逐字对应下方 CSS 块
+  // 的插值行；重基线与模糊曲线机制住 ../translucency.js 投影核。
+  const RIDING = {
+    "--dsw-alias-bg-base": { light: ["247, 250, 252", 55], dark: ["12, 26, 38", 55] },
+    "--dsw-alias-bg-module-platform": { light: ["240, 246, 250", 55], dark: ["22, 48, 67", 60] },
+    "--dsw-alias-bg-layer-1": { light: ["255, 255, 255", 48], dark: ["18, 38, 53", 55] },
+    "--dsw-alias-bg-layer-2": { light: ["255, 255, 255", 56], dark: ["22, 48, 67", 60] },
+    "--dsw-alias-bg-layer-3": { light: ["255, 255, 255", 62], dark: ["26, 58, 80", 64] },
+    "--dsw-specific-sidebar-fill": { light: ["238, 246, 251", 60], dark: ["13, 30, 44", 72] },
+    "--dsw-specific-input-major": { light: ["255, 255, 255", 60], dark: ["18, 42, 60", 65] },
+    "--dsw-specific-login-input": { light: ["255, 255, 255", 60], dark: ["18, 42, 60", 65] },
+  };
+  const SPEC = { anchor: 55, riding: RIDING }; // ridingDecl 只读这两项，与声明表共享引用
+
   const CSS = `
   /* ---------- ③ 配色 · 亮色 ---------- */
   body[data-dsh-openbmc-skin] {
@@ -155,22 +170,22 @@ export function createOpenBmcHarness(jsxRuntime) {
     --dsw-alias-brand-text: #007197;
 
     /* 表面/背景（低不透明度 → 背景画透光；overlay 浮层保持较实） */
-    --dsw-alias-bg-base: rgba(247, 250, 252, 0.55);
+    ${ridingDecl(SPEC, "--dsw-alias-bg-base", "light")}
     --dsw-alias-bg-overlay: rgba(250, 252, 253, 0.82);
-    --dsw-alias-bg-module-platform: rgba(240, 246, 250, 0.55);
-    --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.48);
-    --dsw-alias-bg-layer-2: rgba(255, 255, 255, 0.56);
-    --dsw-alias-bg-layer-3: rgba(255, 255, 255, 0.62);
+    ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "light")}
+    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "light")}
+    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "light")}
+    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "light")}
 
     /* 侧栏列 + 顶栏标题行（冰白透纱，与背景画同调） */
-    --dsw-specific-sidebar-fill: rgba(238, 246, 251, 0.60);
+    ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "light")}
     --dsw-specific-sidebar-nav-item-hover: rgba(231, 241, 248, 0.90);
     --dsw-specific-sidebar-nav-item-active: rgba(220, 235, 245, 0.90);
     --dsw-specific-sidebar-nav-item-active-accent: #9cc8e0;
 
     /* 输入/菜单/选择器/提示 同系冰蓝。（菜单面三件套经 frost-family.js 家族段统一接管） */
-    --dsw-specific-input-major: rgba(255, 255, 255, 0.60);
-    --dsw-specific-login-input: rgba(255, 255, 255, 0.60);
+    ${ridingDecl(SPEC, "--dsw-specific-input-major", "light")}
+    ${ridingDecl(SPEC, "--dsw-specific-login-input", "light")}
     --dsw-specific-selector: rgba(227, 239, 247, 0.85);
     --dsw-specific-tip: rgba(240, 246, 250, 0.90);
 
@@ -191,22 +206,22 @@ export function createOpenBmcHarness(jsxRuntime) {
     --dsw-alias-brand-primary-invert: #06222e;
     --dsw-alias-brand-text: #5ec8e8;
 
-    --dsw-alias-bg-base: rgba(12, 26, 38, 0.55);
+    ${ridingDecl(SPEC, "--dsw-alias-bg-base", "dark")}
     --dsw-alias-bg-overlay: rgba(10, 22, 32, 0.88);
-    --dsw-alias-bg-module-platform: rgba(22, 48, 67, 0.60);
-    --dsw-alias-bg-layer-1: rgba(18, 38, 53, 0.55);
-    --dsw-alias-bg-layer-2: rgba(22, 48, 67, 0.60);
-    --dsw-alias-bg-layer-3: rgba(26, 58, 80, 0.64);
+    ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "dark")}
+    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "dark")}
+    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "dark")}
+    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "dark")}
 
     /* 侧栏列 + 顶栏标题行：深冰蓝海军（与画面同色相，拒绝纯黑） */
-    --dsw-specific-sidebar-fill: rgba(13, 30, 44, 0.72);
+    ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "dark")}
     --dsw-specific-sidebar-nav-item-hover: rgba(18, 41, 58, 0.90);
     --dsw-specific-sidebar-nav-item-active: rgba(20, 47, 68, 0.90);
     --dsw-specific-sidebar-nav-item-active-accent: #29526f;
 
     /* 输入/菜单/选择器/提示 同系深冰蓝（菜单面三件套经 frost-family.js 家族段统一接管） */
-    --dsw-specific-input-major: rgba(18, 42, 60, 0.65);
-    --dsw-specific-login-input: rgba(18, 42, 60, 0.65);
+    ${ridingDecl(SPEC, "--dsw-specific-input-major", "dark")}
+    ${ridingDecl(SPEC, "--dsw-specific-login-input", "dark")}
     --dsw-specific-selector: rgba(16, 40, 64, 0.85);
     --dsw-specific-tip: rgba(12, 30, 44, 0.92);
 
@@ -1733,72 +1748,41 @@ export function createOpenBmcHarness(jsxRuntime) {
     "radial-gradient(950px 700px at 85% 100%, rgba(125, 190, 55, 0.09), transparent 55%)";
 
   /* ================================================================
-   * ⑦b 个性化投影（ADR-0004）：slogan + panelOpacity 单旋钮。
-   * 主 alpha 线性（P/100），每 token 带固定相对增量——增量由烘焙值反推，
-   * 默认 P=55 时派生串与烘焙串逐字节相等（alpha 一律 toFixed(2) 两位小数，
-   * String(60/100) 产 "0.6" ≠ 烘焙 "0.60"，禁用 String）。P=0 纯壁纸
-   * 完全可见；P=100 随动族全钳 1；blur 以默认点为锚二次爬坡，P>55 起
-   * 壁纸 ::before 模糊与面板霜层同步增强（tgcf 同机制）。
+   * ⑦b 个性化投影（ADR-0004 起；ADR-0013 起机制收拢至 ../translucency.js
+   * 通透度投影核，本皮肤只持声明表）：slogan + panelOpacity 单旋钮。
+   * 出厂锚 55：随动重基线与模糊铰链共用（P=0 纯壁纸完全可见，P>55 起
+   * 壁纸 ::before 模糊与面板霜层同步增强）；desktop 出厂 66 属 catalog
+   * 默认层，投影不感知 profile。
    * ================================================================ */
-  const GLASS_RULE =
-    'body[data-dsh-openbmc-skin] [id="root"]{backdrop-filter:blur(var(--dsh-openbmc-glass-blur,0px))}';
-
   const SLOGANS = { zh: "察于未萌 · 治于未乱", en: "Govern before the storm" };
 
-  function project(values, assets) {
-    const P = values.panelOpacity;
-    const wallpaper = values.wallpaper;
-    const url = assets?.wallpaper?.url ?? null;
-    const pt = (baked) => Math.min(100, Math.max(0, P + baked - 55));
-    const pct = (points) => (points / 100).toFixed(2);
-    const alpha = (rgb, baked) => `rgba(${rgb}, ${pct(pt(baked))})`;
+  const table = {
+    bodyAttribute: "dshOpenbmcSkin",
+    titleBrand: "OpenBMC Studio",
+    favicon: { href: FAVICON_DATA_URL, mime: FAVICON_MIME },
+    anchor: 55,
+    riding: RIDING,
+    constantTokens: null,
+    scrim: {
+      kind: "baked-gradient",
+      stops: {
+        light: [["247, 250, 252", 15], ["240, 246, 250", 28]],
+        dark: [["7, 14, 22", 10], ["4, 9, 14", 24]],
+      },
+      artLayer,
+    },
+    blur: { max: 24 },
+    glassVar: "--dsh-openbmc-glass-blur",
+    desktopBlur: { rate: 55, dark: "none" }, // OpenBMC dark remains the approved reference baseline
+    wallpaper: {
+      kind: "legacy-baked",
+      sentinel: "builtin:openbmc:art",
+      placeholder: { light: PLACEHOLDER_LIGHT, dark: PLACEHOLDER_DARK },
+    },
+    staticCss: CSS,
+  };
 
-    // 随动族：字面量烘焙点（亮 / 暗），RGB 逐字取自 ③ 配色块。
-    const riding = {
-      "--dsw-alias-bg-base": { light: ["247, 250, 252", 55], dark: ["12, 26, 38", 55] },
-      "--dsw-alias-bg-module-platform": { light: ["240, 246, 250", 55], dark: ["22, 48, 67", 60] },
-      "--dsw-alias-bg-layer-1": { light: ["255, 255, 255", 48], dark: ["18, 38, 53", 55] },
-      "--dsw-alias-bg-layer-2": { light: ["255, 255, 255", 56], dark: ["22, 48, 67", 60] },
-      "--dsw-alias-bg-layer-3": { light: ["255, 255, 255", 62], dark: ["26, 58, 80", 64] },
-      "--dsw-specific-sidebar-fill": { light: ["238, 246, 251", 60], dark: ["13, 30, 44", 72] },
-      "--dsw-specific-input-major": { light: ["255, 255, 255", 60], dark: ["18, 42, 60", 65] },
-      "--dsw-specific-login-input": { light: ["255, 255, 255", 60], dark: ["18, 42, 60", 65] },
-    };
-    const tokenOverrides = {};
-    for (const [key, modes] of Object.entries(riding)) {
-      tokenOverrides[key] = { light: alpha(modes.light[0], modes.light[1]), dark: alpha(modes.dark[0], modes.dark[1]) };
-    }
-
-    // 纱与旋钮同联动（默认 P 时整串与烘焙 scrim 逐字节相等）；浮层族
-    // （bg-overlay/menu/selector/tip/nav 态/气泡）固定不随旋钮。
-    const scrimLight = `linear-gradient(${alpha("247, 250, 252", 15)} 0%, ${alpha("240, 246, 250", 28)} 100%)` + artLayer;
-    const scrimDark = `linear-gradient(${alpha("7, 14, 22", 10)} 0%, ${alpha("4, 9, 14", 24)} 100%)` + artLayer;
-
-    // legacy 壁纸语义：用户图走裸 url（纱不上用户图）；烘焙分支含占位兜底。
-    const custom = typeof wallpaper === "string" && wallpaper !== "builtin:openbmc:art"
-      && resolveImageRef(wallpaper)?.kind === "user" && url !== null;
-    const imageLight = custom ? `url("${url}")` : (BACKGROUND_ART === "" ? PLACEHOLDER_LIGHT : scrimLight);
-    const imageDark = custom ? `url("${url}")` : (BACKGROUND_ART === "" ? PLACEHOLDER_DARK : scrimDark);
-
-    const blurPx = Math.round(24 * Math.pow(Math.max(0, (P - 55) / 45), 2));
-    const desktopExtraBlurPx = P / 55;
-    const desktopBlur = {
-      light: Math.min(24, blurPx + desktopExtraBlurPx),
-      dark: blurPx, // OpenBMC dark remains the approved reference baseline.
-    };
-
-    return {
-      bodyAttribute: "dshOpenbmcSkin",
-      slogans: values.slogan ?? SLOGANS,
-      titleBrand: "OpenBMC Studio",
-      favicon: { href: FAVICON_DATA_URL, mime: FAVICON_MIME },
-      backdrop: { imageLight, imageDark, overlayLight: null, overlayDark: null, blur: blurPx, desktopBlur },
-      tokenOverrides,
-      cssVariables: blurPx > 0 ? { "--dsh-openbmc-glass-blur": { light: `${blurPx}px`, dark: `${blurPx}px` } } : null,
-      staticCss: blurPx > 0 ? CSS + "\n" + GLASS_RULE : CSS,
-      decorations: null,
-    };
-  }
+  const project = createProjection(table);
 
 
   return {
@@ -1821,6 +1805,10 @@ export function createOpenBmcHarness(jsxRuntime) {
     placeholderLight: PLACEHOLDER_LIGHT,
     placeholderDark: PLACEHOLDER_DARK,
     slogans: SLOGANS,
+    builtinAssets: {
+      // ADR-0014（B15）：显式声明，替代 index.js 的 legacy 合成补底。
+      art: { mime: "image/webp", url: BACKGROUND_ART },
+    },
     project,
   };
 }
