@@ -63,6 +63,7 @@ export function createConfigClient(options = {}) {
   let writeChain = Promise.resolve();
   let lastFlushCode = null;
   let lastFlushError = null;
+  let revertedFields = []; // [{skinId, key}] — dangling previews excised by name (ADR-0015)
   let channel = null;
 
   function setFlushFailure(code, message) {
@@ -90,6 +91,7 @@ export function createConfigClient(options = {}) {
       quota: snapshot.quota,
       lastFlushCode,
       lastFlushError,
+      revertedFields: revertedFields.map((entry) => ({ ...entry })),
       dirtyCount: previews.size,
     };
   }
@@ -274,13 +276,45 @@ export function createConfigClient(options = {}) {
             return { flushed: 0, blocked: "error", errorMessage };
           }
           if (!response.ok) {
-            // Keep the previews dirty so a later edit can retry — and NAME
-            // the failure: a silent 400 reads as "did it save?" (field
-            // report: the stale-host BAD_SHAPE stayed invisible for days).
             const errorBody = await response.json().catch(() => null);
             const errorMessage = errorBody?.error ?? `HTTP ${response.status}`;
-            setFlushFailure(null, errorMessage);
+            // ADR-0015: a 400 with structured params.issues lets the client
+            // NAME the poison. Dangling references (MISSING_ASSET / BAD_ASSET)
+            // are excised and reported as revertedFields instead of staying
+            // dirty forever and blocking every later auto-save; every other
+            // issue keeps its previews dirty and surfaces the named error.
+            const issues = Array.isArray(errorBody?.params?.issues) ? errorBody.params.issues : null;
+            let excised = false;
+            let onlyDangling = issues !== null && issues.length > 0;
+            if (issues !== null) {
+              for (const issue of issues) {
+                const dangling = issue.code === "MISSING_ASSET" || issue.code === "BAD_ASSET";
+                if (!dangling) onlyDangling = false;
+                if (dangling && typeof issue.skinId === "string" && typeof issue.key === "string") {
+                  const composite = `${issue.skinId} ${issue.key}`;
+                  // Only a deletion in THIS round counts: the continuation is
+                  // bounded by "each round removes ≥1 preview" (a repeat issue
+                  // for an already-excised field must not re-arm the loop).
+                  if (previews.has(composite)) {
+                    previews.delete(composite);
+                    excised = true;
+                    const alreadyNoted = revertedFields.some(
+                      (entry) => entry.skinId === issue.skinId && entry.key === issue.key,
+                    );
+                    if (!alreadyNoted) revertedFields.push({ skinId: issue.skinId, key: issue.key });
+                  }
+                }
+              }
+            }
+            // A batch whose issues are ALL dangling is fully self-healed: the
+            // named reversion notice replaces the generic failure strip.
+            setFlushFailure(null, onlyDangling ? null : errorMessage);
             emit();
+            // Self-healing continuation: re-flush the surviving previews
+            // without waiting for the user's next edit. Bounded — each
+            // continuation excises at least one more preview or terminates on
+            // a named error.
+            if (excised && previews.size > 0) void flushNow();
             return { flushed: 0, blocked: "error", errorMessage };
           }
           await response.json().catch(() => null); // drained; resync happens in refetch()
@@ -289,6 +323,7 @@ export function createConfigClient(options = {}) {
             if (previews.get(composite) === value) previews.delete(composite);
           }
           setFlushFailure(null, null);
+          revertedFields = []; // a healthy flush retires any earlier dangling notice
           // Resync from the Host rather than trusting a racing local snapshot:
           // a refetch issued mid-flight may otherwise resurrect pre-write state.
           await refetch();
@@ -483,23 +518,111 @@ export function createConfigClient(options = {}) {
   async function concludeUpload(outcome) {
     if (outcome.error !== undefined) return { error: outcome.error };
     const body = await outcome.response.json();
-    await refetch();
+    // Local merge (ADR-0015 rider ①): the upload response carries
+    // {asset, revision} and an append rewrites neither references nor
+    // overrides, so the snapshot is merged locally instead of pulling a full
+    // refetch — batch uploads drop from 2N to N+1 round trips. Other tabs
+    // still hear the announce() ping; divergence self-heals on the next
+    // flush/focus resync.
+    if (body?.asset?.id !== undefined) {
+      snapshot = {
+        ...snapshot,
+        revision: typeof body.revision === "number" ? body.revision : snapshot.revision,
+        library: [...snapshot.library, body.asset],
+        quota: {
+          count: (snapshot.quota?.count ?? 0) + 1,
+          totalBytes: (snapshot.quota?.totalBytes ?? 0) + (body.asset.byteLength ?? 0),
+        },
+      };
+      emit();
+    }
     announce();
     return { asset: body.asset };
+  }
+
+  /**
+   * One gallery write through the unified PATCH dialect (ADR-0015), serialized
+   * on the write chain with field flushes (a pending debounced flush must
+   * never race the delete's baseRevision). Conflict semantics: 409 → refetch
+   * → the goal is already achieved (asset gone / library empty) → silent
+   * success (GLOSSARY 悬空预览/B2); otherwise retry once on the fresh
+   * baseRevision, then a named error. Success keeps the post-success refetch:
+   * deletes rewrite server-computed references, which no local merge can
+   * reproduce (asymmetric with the append-only upload).
+   */
+  function runGalleryOp(operations, goalAchieved) {
+    writeChain = writeChain.then(async () => {
+      if (disposed) return { error: "disposed" };
+      const blocked = gateWrites();
+      if (blocked !== null) return { error: blocked };
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let response;
+        try {
+          response = await request("/config", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ baseRevision: snapshot.revision, operations }),
+          });
+        } catch {
+          return { error: "OFFLINE" };
+        }
+        if (disposed) return { error: "disposed" };
+        if (response.status === 409) {
+          const conflictBody = await response.json().catch(() => null);
+          if (conflictBody?.code === "STORE_READONLY") {
+            setFlushFailure(null, null);
+            setStatus("unsupported-readonly");
+            return { error: "conflict" };
+          }
+          await refetch();
+          if (goalAchieved()) return { affectedSkins: [] }; // a contender finished the job
+          if (attempt === 1) {
+            setFlushFailure(null, null);
+            emit();
+            return { error: "REVISION_CONFLICT" };
+          }
+          continue; // retry once on the fresh baseRevision
+        }
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          if (body?.code === "INVALID_CONFIG"
+            && body.params?.issues?.some((issue) => issue.code === "ASSET_NOT_FOUND")) {
+            await refetch();
+            if (goalAchieved()) return { affectedSkins: [] };
+            return { error: "ASSET_NOT_FOUND" };
+          }
+          return { error: body?.code ?? `HTTP ${response.status}` };
+        }
+        const body = await response.json().catch(() => null);
+        await refetch();
+        announce();
+        return { affectedSkins: body?.affectedSkins ?? [], revision: body?.revision };
+      }
+      return { error: "REVISION_CONFLICT" };
+    });
+    return writeChain;
   }
 
   async function deleteImage(id) {
     const blocked = gateWrites();
     if (blocked !== null) return { error: blocked };
-    const response = await request(`/library/${id}`, { method: "DELETE" });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      return { error: body?.code ?? `HTTP ${response.status}` };
+    return runGalleryOp([{ op: "deleteAsset", assetId: id }],
+      () => !snapshot.library.some((entry) => entry.id === id));
+  }
+
+  function clearLibrary() {
+    return runGalleryOp([{ op: "clearLibrary" }], () => snapshot.library.length === 0);
+  }
+
+  /** Dirty preview fields with a value set (reset ops reference nothing). */
+  function dirtyFields() {
+    const fields = [];
+    for (const [composite, value] of previews) {
+      if (value === null) continue;
+      const [skinId, key] = composite.split(" ");
+      fields.push({ skinId, key, value });
     }
-    const body = await response.json();
-    await refetch();
-    announce();
-    return { affectedSkins: body.affectedSkins ?? [], revision: body.revision };
+    return fields;
   }
 
   async function confirmRecovery() {
@@ -527,6 +650,8 @@ export function createConfigClient(options = {}) {
     effectiveOverrides,
     uploadImage,
     deleteImage,
+    clearLibrary,
+    dirtyFields,
     confirmRecovery,
     assetUrl,
     getState: publicState,

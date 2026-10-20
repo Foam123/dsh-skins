@@ -74,12 +74,22 @@ test("a same-status refetch still notifies subscribers (field report: stale libr
   client.dispose();
 });
 
-test("deleteImage: subscribers see the shrunken library after a successful DELETE", async () => {
+// G0 exception ① (ADR-0015 plan): rewritten to the PATCH dialect — the fake
+// now routes deleteAsset through PATCH /config instead of DELETE /library.
+test("deleteImage: subscribers see the shrunken library after a successful delete (PATCH dialect)", async () => {
   const remaining = [{ id: "u_a", displayName: "a.png", extension: "png" }];
   const deleted = { id: "u_b", displayName: "b.png", extension: "png" };
-  const fetchImpl = makeFetch((n, url) => {
-    if (n === 1) return snapshotBody({ library: [remaining[0], deleted] });
-    if (url.includes("/library/u_b")) return jsonResponse(200, { affectedSkins: [], revision: 8 });
+  let booted = false;
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      assert.deepEqual(JSON.parse(init.body),
+        { baseRevision: 7, operations: [{ op: "deleteAsset", assetId: "u_b" }] });
+      return jsonResponse(200, { revision: 8, affectedSkins: [{ skinId: "openbmc", key: "wallpaper" }] });
+    }
+    if (!booted) {
+      booted = true;
+      return snapshotBody({ library: [remaining[0], deleted] });
+    }
     return snapshotBody({ revision: 8, library: remaining });
   });
   const client = flushingClient(fetchImpl);
@@ -87,8 +97,10 @@ test("deleteImage: subscribers see the shrunken library after a successful DELET
   const seen = [];
   client.onStateChange((state) => seen.push(state.library.map((a) => a.id)));
   const result = await client.deleteImage("u_b");
-  assert.equal(result.error, undefined, "DELETE succeeded");
+  assert.equal(result.error, undefined, "delete succeeded");
+  assert.deepEqual(result.affectedSkins, [{ skinId: "openbmc", key: "wallpaper" }]);
   assert.deepEqual(client.getState().library.map((a) => a.id), ["u_a"], "snapshot lost the asset");
+  assert.equal(client.getState().revision, 8);
   assert.ok(seen.some((ids) => !ids.includes("u_b")), "subscribers were told — the grid must follow");
   client.dispose();
 });
@@ -808,5 +820,189 @@ test("a Host-coded 400 is a concluded answer and never retried", async () => {
   const result = await client.uploadImage(new Uint8Array(8));
   assert.deepEqual(result, { error: "FILENAME_INVALID" });
   assert.equal(posts, 1, "coded errors reached the store logic — retrying cannot help");
+  client.dispose();
+});
+
+// ---- ADR-0015: gallery conflicts, dangling self-heal, local merge ----------
+
+test("deleteImage: 409 then the asset is already gone → silent success (B2)", async () => {
+  const asset = { id: "u_b", displayName: "b.png", extension: "png" };
+  let gets = 0;
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") return jsonResponse(409, { error: "冲突", code: "REVISION_CONFLICT" });
+    gets += 1;
+    return snapshotBody({ revision: gets, library: gets === 1 ? [asset] : [] });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  const result = await client.deleteImage("u_b");
+  assert.deepEqual(result, { affectedSkins: [] }, "a contender finished the job — silent success");
+  client.dispose();
+});
+
+test("deleteImage: 409 with the asset still present → retry once on the fresh baseRevision", async () => {
+  const asset = { id: "u_b", displayName: "b.png", extension: "png" };
+  let gets = 0;
+  const patches = [];
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      patches.push(JSON.parse(init.body).baseRevision);
+      return patches.length === 1
+        ? jsonResponse(409, { error: "冲突", code: "REVISION_CONFLICT" })
+        : jsonResponse(200, { revision: 99, affectedSkins: [] });
+    }
+    gets += 1;
+    return snapshotBody({ revision: gets, library: [asset] });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  const result = await client.deleteImage("u_b");
+  assert.equal(result.error, undefined);
+  assert.deepEqual(patches, [1, 2], "exactly one retry on the fresh baseRevision");
+  client.dispose();
+});
+
+test("deleteImage: 409 twice → named REVISION_CONFLICT error", async () => {
+  const asset = { id: "u_b", displayName: "b.png", extension: "png" };
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") return jsonResponse(409, { error: "冲突", code: "REVISION_CONFLICT" });
+    return snapshotBody({ library: [asset] });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  const result = await client.deleteImage("u_b");
+  assert.equal(result.error, "REVISION_CONFLICT");
+  client.dispose();
+});
+
+test("clearLibrary: 409 with the library already emptied → silent success", async () => {
+  let gets = 0;
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") return jsonResponse(409, { error: "冲突", code: "REVISION_CONFLICT" });
+    gets += 1;
+    return snapshotBody({ revision: gets, library: gets === 1 ? [{ id: "u_a" }] : [] });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  const result = await client.clearLibrary();
+  assert.deepEqual(result, { affectedSkins: [] });
+  client.dispose();
+});
+
+test("clearLibrary: happy path returns affectedSkins and refetches", async () => {
+  let gets = 0;
+  let patchSeen = false;
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      patchSeen = JSON.parse(init.body);
+      return jsonResponse(200, { revision: 8, affectedSkins: [{ skinId: "openbmc", key: "wallpaper" }] });
+    }
+    gets += 1;
+    return snapshotBody({ revision: 8, library: gets === 1 ? [{ id: "u_a" }] : [] });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  const result = await client.clearLibrary();
+  assert.deepEqual(result.affectedSkins, [{ skinId: "openbmc", key: "wallpaper" }]);
+  assert.deepEqual(patchSeen, { baseRevision: 8, operations: [{ op: "clearLibrary" }] });
+  assert.deepEqual(client.getState().library, []);
+  client.dispose();
+});
+
+test("flush: dangling-only issues excise the poison by name and auto re-flush heals the rest", async () => {
+  const patches = [];
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      patches.push(JSON.parse(init.body));
+      if (patches.length === 1) {
+        return jsonResponse(400, {
+          error: "校验失败", code: "INVALID_CONFIG",
+          params: {
+            code: "MISSING_ASSET",
+            issues: [{ opIndex: 0, skinId: "openbmc", key: "wallpaper", code: "MISSING_ASSET" }],
+          },
+        });
+      }
+      return jsonResponse(200, { revision: 9 });
+    }
+    return snapshotBody({ revision: 9 });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  client.preview("openbmc", "wallpaper", "u_ffffffffffffffffffffffffffffffff");
+  client.preview("meirenzhi", "slogan", { zh: "甲", en: "A" });
+  const result = await client.flushNow();
+  assert.equal(result.blocked, "error");
+  assert.deepEqual(client.getState().revertedFields,
+    [{ skinId: "openbmc", key: "wallpaper" }], "the poison is named, not silenced");
+  assert.equal(client.getState().lastFlushError, null, "dangling-only: no generic failure strip");
+  // The continuation runs on the write chain right after this task — give it
+  // a turn before asserting its effects.
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(patches.length, 2, "the auto re-flush fired");
+  assert.deepEqual(patches[1].operations,
+    [{ op: "set", skinId: "meirenzhi", key: "slogan", value: { zh: "甲", en: "A" } }],
+    "only the surviving preview was re-sent");
+  const state = client.getState();
+  assert.equal(state.dirtyCount, 0, "the survivor flushed clean");
+  assert.deepEqual(state.revertedFields, [], "a healthy flush retires the notice");
+  client.dispose();
+});
+
+test("flush: mixed issues excise the dangling preview and name the rest", async () => {
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "PATCH") {
+      return jsonResponse(400, {
+        error: "校验失败", code: "INVALID_CONFIG",
+        params: {
+          code: "MISSING_ASSET",
+          issues: [
+            { opIndex: 0, skinId: "openbmc", key: "wallpaper", code: "MISSING_ASSET" },
+            { opIndex: 1, skinId: "meirenzhi", key: "panelOpacity", code: "BAD_VALUE" },
+          ],
+        },
+      });
+    }
+    return snapshotBody();
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  client.preview("openbmc", "wallpaper", "u_ffffffffffffffffffffffffffffffff");
+  client.preview("meirenzhi", "panelOpacity", 3);
+  await client.flushNow();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  const state = client.getState();
+  assert.deepEqual(state.revertedFields, [{ skinId: "openbmc", key: "wallpaper" }]);
+  assert.equal(state.lastFlushError, "校验失败", "named error for the non-dangling issue");
+  assert.equal(state.dirtyCount, 1, "the BAD_VALUE preview stays dirty for retry");
+  client.dispose();
+});
+
+test("upload success merges locally — no GET /config after the POST (rider ①)", async () => {
+  const asset = { id: "u_new", displayName: "w.png", extension: "png", byteLength: 8 };
+  const fetchImpl = makeFetch((n, url, init) => {
+    if (init?.method === "POST") return jsonResponse(201, { asset, revision: 8 });
+    return snapshotBody({ revision: 7, library: [] });
+  });
+  const client = flushingClient(fetchImpl);
+  await client.boot();
+  const callsBefore = fetchImpl.calls.length;
+  const result = await client.uploadImage(new Uint8Array(8));
+  assert.equal(result.asset.id, "u_new");
+  assert.equal(fetchImpl.calls.length, callsBefore + 1, "exactly one POST, zero refetch");
+  assert.equal(fetchImpl.calls.at(-1).init.method, "POST");
+  const state = client.getState();
+  assert.deepEqual(state.library, [asset], "merged locally");
+  assert.equal(state.revision, 8, "revision aligned with the response");
+  assert.equal(state.quota.count, 1);
+  client.dispose();
+});
+
+test("dirtyFields lists valued previews only (the panel's preview-reference seam)", async () => {
+  const client = flushingClient(makeFetch(() => snapshotBody()));
+  await client.boot();
+  client.preview("openbmc", "wallpaper", "u_x");
+  client.previewReset("meirenzhi", "slogan");
+  assert.deepEqual(client.dirtyFields(), [{ skinId: "openbmc", key: "wallpaper", value: "u_x" }]);
   client.dispose();
 });
