@@ -865,6 +865,45 @@ test("A15: in-batch ordering — set X then deleteAsset X ends with the field re
   assert.equal(snap.library.length, 0);
 });
 
+test("A15: reverse order — deleteAsset X then set wallpaper=X fails closed (terminal invariant)", async () => {
+  const store = makeStore(tempDir());
+  const { asset } = await store.uploadAsset(pngBytes(), { displayName: "w" });
+  const revision = store.snapshot().revision;
+  await assert.rejects(
+    store.applyOperations({
+      baseRevision: revision,
+      operations: [
+        { op: "deleteAsset", assetId: asset.id },
+        { op: "set", skinId: "openbmc", key: "wallpaper", value: asset.id },
+      ],
+    }),
+    (e) => {
+      assert.equal(e.code, "INVALID_CONFIG");
+      assert.deepEqual(e.params.issues, [{ skinId: "openbmc", key: "wallpaper", code: "MISSING_ASSET" }]);
+      return true;
+    },
+  );
+  const snap = store.snapshot();
+  assert.equal(snap.revision, revision, "zero commits");
+  assert.equal(snap.library.length, 1, "nothing deleted, nothing dangled — the whole batch rolled back");
+});
+
+test("A15: duplicate deleteAsset ops in one batch are idempotent no-ops", async () => {
+  const dir = tempDir();
+  const store = makeStore(dir);
+  const { asset } = await store.uploadAsset(pngBytes(), { displayName: "w" });
+  const result = await store.applyOperations({
+    baseRevision: store.snapshot().revision,
+    operations: [
+      { op: "deleteAsset", assetId: asset.id },
+      { op: "deleteAsset", assetId: asset.id },
+    ],
+  });
+  assert.equal(result.revision, 2, "one commit, one bump");
+  assert.equal(store.snapshot().library.length, 0);
+  assert.equal(readdirSync(join(dir, "assets")).filter((f) => !f.startsWith(".")).length, 0, "blob unlinked exactly once");
+});
+
 test("A15: deleteAsset op reports affectedSkins and unlinks the blob", async () => {
   const dir = tempDir();
   const store = makeStore(dir);

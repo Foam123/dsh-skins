@@ -529,11 +529,13 @@ export function createPersonalizationStore(options = {}) {
           else delete draft.skins[skinId][key];
         } else if (op === "deleteAsset") {
           galleryOps = true;
-          removedAssets.push(applyGalleryDelete(draft, operation.assetId, affectedSkins));
+          const meta = applyGalleryDelete(draft, operation.assetId, affectedSkins);
+          if (meta !== undefined) removedAssets.push(meta); // in-batch duplicates are no-ops
         } else if (op === "clearLibrary") {
           galleryOps = true;
           for (const id of Object.keys(draft.library)) {
-            removedAssets.push(applyGalleryDelete(draft, id, affectedSkins));
+            const meta = applyGalleryDelete(draft, id, affectedSkins);
+            if (meta !== undefined) removedAssets.push(meta);
           }
         }
       }
@@ -541,6 +543,26 @@ export function createPersonalizationStore(options = {}) {
       // library) is an idempotent no-op: no commit, no revision bump.
       if (galleryOps && !hasFieldOps && removedAssets.length === 0) {
         return { revision: state.revision, affectedSkins };
+      }
+      // Terminal-state invariant (ADR-0015: 终态一致、无悬空). Validation ran
+      // against the PRE-batch library (B3), so a deleteAsset ordered BEFORE a
+      // set of the same asset would otherwise persist a dangling reference —
+      // fail closed on the draft instead of waiting for load-time self-heal.
+      if (galleryOps) {
+        const finalProvider = metaProviderFactory(draft.library);
+        for (const [skinId, section] of Object.entries(draft.skins)) {
+          for (const field of listAssetFields(skinId)) {
+            const value = section?.[field.key];
+            if (value === undefined) continue;
+            const verdict = validateOverride(skinId, field.key, value, finalProvider);
+            if (!verdict.ok) {
+              throw codedError("INVALID_CONFIG", `终态校验失败：${skinId}.${field.key} 引用已删除资产`, {
+                code: verdict.code,
+                issues: [{ skinId, key: field.key, code: verdict.code }],
+              });
+            }
+          }
+        }
       }
       draft.revision += 1;
       commitState(draft);
