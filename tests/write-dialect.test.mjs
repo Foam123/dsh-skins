@@ -135,7 +135,8 @@ test("acceptance ②: dangling preview self-heals end to end (409 → refetch �
   assert.equal(removed.status, 200);
 
   const flushed = await client.flushNow();
-  assert.equal(flushed.blocked, "error");
+  assert.deepEqual(flushed, { flushed: 0, blocked: null, selfHealed: true },
+    "dangling-only: self-healed, not blocked");
   const state = client.getState();
   assert.deepEqual(state.revertedFields, [{ skinId: "openbmc", key: "wallpaper" }],
     "the poison is named, not silenced");
