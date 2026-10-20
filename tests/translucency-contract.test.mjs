@@ -286,3 +286,15 @@ test("openbmc source: riding declarations single-sourced (16 interpolations, zer
     );
   }
 });
+
+test("uefi source: riding declarations single-sourced (14 interpolations, zero hand-written)", () => {
+  const src = readFileSync(SRC.uefi, "utf8");
+  assert.equal(countMatches(src, "\\$\\{ridingDecl\\("), 14, "exactly 14 ridingDecl interpolations");
+  for (const token of Object.keys(GOLD.uefi.riding)) {
+    assert.equal(
+      countMatches(src, escapeRe(`${token}: rgba(`)),
+      0,
+      `${token} must not appear as a hand-written rgba declaration (12 non-riding neighbours are exempt by full-name match)`,
+    );
+  }
+});

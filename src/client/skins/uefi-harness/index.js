@@ -5,8 +5,8 @@
  * logo (source and trademark note in README known limits); the rest of the
  * design remains a placeholder until the final design lands.
  */
-import { resolveImageRef } from "../../../shared/personalization/catalog.js";
 import { frostFamilyCss } from "../frost-family.js";
+import { createProjection, ridingDecl } from "../translucency.js";
 
 // Official UEFI Forum logo — the red cube with white "uefi" letters, embedded
 // as two vector paths traced from uefi.org's published uefi_logo_red.gif
@@ -60,22 +60,36 @@ export function createUefiHarness({ jsx }) {
     frost: { light: "248, 247, 255", dark: "23, 18, 45" },
     menu: { light: "248, 247, 255", dark: "28, 22, 55" },
   };
+
+  // 随动族（ADR-0013）：值即出厂锚点 55 处的烘焙读数，逐字对应下方 css 块
+  // 的插值行；重基线与模糊曲线机制住 ../translucency.js 投影核。
+  const RIDING = {
+    "--dsw-alias-bg-base": { light: ["248, 247, 255", 55], dark: ["23, 18, 45", 55] },
+    "--dsw-alias-bg-module-platform": { light: ["241, 238, 255", 55], dark: ["39, 31, 73", 60] },
+    "--dsw-alias-bg-layer-1": { light: ["255, 255, 255", 48], dark: ["31, 25, 59", 55] },
+    "--dsw-alias-bg-layer-2": { light: ["247, 245, 255", 56], dark: ["39, 31, 73", 60] },
+    "--dsw-alias-bg-layer-3": { light: ["241, 238, 255", 62], dark: ["48, 38, 88", 64] },
+    "--dsw-specific-sidebar-fill": { light: ["238, 235, 255", 60], dark: ["25, 20, 48", 72] },
+    "--dsw-specific-input-major": { light: ["255, 255, 255", 62], dark: ["42, 34, 78", 55] },
+  };
+  const SPEC = { anchor: 55, riding: RIDING }; // ridingDecl 只读这两项，与声明表共享引用
+
   const css = `
 body[data-dsh-uefi-harness] {
   --dsw-alias-brand-primary: #6553d8;
   --dsw-alias-brand-primary-invert: #ffffff;
   --dsw-alias-brand-text: #5846c2;
-  --dsw-alias-bg-base: rgba(248, 247, 255, 0.55);
+  ${ridingDecl(SPEC, "--dsw-alias-bg-base", "light")}
   --dsw-alias-bg-overlay: rgba(252, 251, 255, 0.82);
-  --dsw-alias-bg-module-platform: rgba(241, 238, 255, 0.55);
-  --dsw-alias-bg-layer-1: rgba(255, 255, 255, 0.48);
-  --dsw-alias-bg-layer-2: rgba(247, 245, 255, 0.56);
-  --dsw-alias-bg-layer-3: rgba(241, 238, 255, 0.62);
-  --dsw-specific-sidebar-fill: rgba(238, 235, 255, 0.60);
+  ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "light")}
+  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "light")}
+  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "light")}
+  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "light")}
+  ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "light")}
   --dsw-specific-sidebar-nav-item-hover: rgba(101, 83, 216, 0.09);
   --dsw-specific-sidebar-nav-item-active: rgba(101, 83, 216, 0.15);
   --dsw-specific-sidebar-nav-item-active-accent: #8b7cff;
-  --dsw-specific-input-major: rgba(255, 255, 255, 0.62);
+  ${ridingDecl(SPEC, "--dsw-specific-input-major", "light")}
   --dsw-specific-selector: rgba(232, 228, 255, 0.78);
   --dsw-specific-tip: rgba(244, 242, 255, 0.88);
   --dsw-alias-label-primary: #211c36;
@@ -91,17 +105,17 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] {
   --dsw-alias-brand-primary: #a99cff;
   --dsw-alias-brand-primary-invert: #1b143a;
   --dsw-alias-brand-text: #b7acff;
-  --dsw-alias-bg-base: rgba(23, 18, 45, 0.55);
+  ${ridingDecl(SPEC, "--dsw-alias-bg-base", "dark")}
   --dsw-alias-bg-overlay: rgba(27, 21, 54, 0.88);
-  --dsw-alias-bg-module-platform: rgba(39, 31, 73, 0.60);
-  --dsw-alias-bg-layer-1: rgba(31, 25, 59, 0.55);
-  --dsw-alias-bg-layer-2: rgba(39, 31, 73, 0.60);
-  --dsw-alias-bg-layer-3: rgba(48, 38, 88, 0.64);
-  --dsw-specific-sidebar-fill: rgba(25, 20, 48, 0.72);
+  ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "dark")}
+  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "dark")}
+  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "dark")}
+  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "dark")}
+  ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "dark")}
   --dsw-specific-sidebar-nav-item-hover: rgba(169, 156, 255, 0.10);
   --dsw-specific-sidebar-nav-item-active: rgba(169, 156, 255, 0.17);
   --dsw-specific-sidebar-nav-item-active-accent: #6657a8;
-  --dsw-specific-input-major: rgba(42, 34, 78, 0.55);
+  ${ridingDecl(SPEC, "--dsw-specific-input-major", "dark")}
   --dsw-specific-selector: rgba(51, 40, 96, 0.78);
   --dsw-specific-tip: rgba(34, 27, 65, 0.90);
   --dsw-alias-label-primary: #f0edff;
@@ -1096,70 +1110,41 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] :is([class*="oRe1gG_bubble"], [c
     "linear-gradient(rgba(23, 18, 45, 0.08) 0%, rgba(16, 12, 34, 0.20) 100%)" + artLayer;
 
   /* ================================================================
-   * 个性化投影（ADR-0004）：slogan + panelOpacity 单旋钮。
-   * 主 alpha 线性（P/100），每 token 带固定相对增量——增量由烘焙值反推，
-   * 默认 P=55 时派生串与烘焙串逐字节相等（alpha 一律 toFixed(2) 两位小数）。
-   * P=0 纯壁纸完全可见；P=100 随动族全钳 1；blur 以默认点为锚二次爬坡，
-   * P>55 起壁纸 ::before 模糊与面板霜层同步增强（tgcf 同机制）。
+   * 个性化投影（ADR-0004 起；ADR-0013 起机制收拢至 ../translucency.js
+   * 通透度投影核，本皮肤只持声明表）：slogan + panelOpacity 单旋钮。
+   * 出厂锚 55：随动重基线与模糊铰链共用（P=0 纯壁纸完全可见，P>55 起
+   * 壁纸 ::before 模糊与面板霜层同步增强）；desktop 出厂 66 属 catalog
+   * 默认层，投影不感知 profile。
    * ================================================================ */
-  const GLASS_RULE =
-    'body[data-dsh-uefi-harness] [id="root"]{backdrop-filter:blur(var(--dsh-uefi-glass-blur,0px))}';
-
   const SLOGANS = { zh: "启于固件 · 行于万象", en: "Boot before everything" };
 
-  function project(values, assets) {
-    const P = values.panelOpacity;
-    const wallpaper = values.wallpaper;
-    const url = assets?.wallpaper?.url ?? null;
-    const pt = (baked) => Math.min(100, Math.max(0, P + baked - 55));
-    const pct = (points) => (points / 100).toFixed(2);
-    const alpha = (rgb, baked) => `rgba(${rgb}, ${pct(pt(baked))})`;
-
-    // 随动族：字面量烘焙点（亮 / 暗），RGB 逐字取自上部配色块（7 token，
-    // uefi 无 login-input）；浮层族（bg-overlay/menu/selector/tip/nav 态/
-    // 气泡）固定不随旋钮。
-    const riding = {
-      "--dsw-alias-bg-base": { light: ["248, 247, 255", 55], dark: ["23, 18, 45", 55] },
-      "--dsw-alias-bg-module-platform": { light: ["241, 238, 255", 55], dark: ["39, 31, 73", 60] },
-      "--dsw-alias-bg-layer-1": { light: ["255, 255, 255", 48], dark: ["31, 25, 59", 55] },
-      "--dsw-alias-bg-layer-2": { light: ["247, 245, 255", 56], dark: ["39, 31, 73", 60] },
-      "--dsw-alias-bg-layer-3": { light: ["241, 238, 255", 62], dark: ["48, 38, 88", 64] },
-      "--dsw-specific-sidebar-fill": { light: ["238, 235, 255", 60], dark: ["25, 20, 48", 72] },
-      "--dsw-specific-input-major": { light: ["255, 255, 255", 62], dark: ["42, 34, 78", 55] },
-    };
-    const tokenOverrides = {};
-    for (const [key, modes] of Object.entries(riding)) {
-      tokenOverrides[key] = { light: alpha(modes.light[0], modes.light[1]), dark: alpha(modes.dark[0], modes.dark[1]) };
-    }
-
-    // 纱与旋钮同联动（默认 P 时整串与烘焙 scrim 逐字节相等）。
-    const scrimLight = `linear-gradient(${alpha("248, 247, 255", 10)} 0%, ${alpha("238, 234, 255", 22)} 100%)` + artLayer;
-    const scrimDark = `linear-gradient(${alpha("23, 18, 45", 8)} 0%, ${alpha("16, 12, 34", 20)} 100%)` + artLayer;
-
-    // legacy 壁纸语义：用户图走裸 url（纱不上用户图）。
-    const custom = typeof wallpaper === "string" && wallpaper !== "builtin:uefi-harness:art"
-      && resolveImageRef(wallpaper)?.kind === "user" && url !== null;
-    const imageLight = custom ? `url("${url}")` : scrimLight;
-    const imageDark = custom ? `url("${url}")` : scrimDark;
-
-    const blurPx = Math.round(24 * Math.pow(Math.max(0, (P - 55) / 45), 2));
-    const desktopBlurPx = Math.min(24, blurPx + P / 55);
-
-    return {
-      bodyAttribute: "dshUefiHarness",
-      slogans: values.slogan ?? SLOGANS,
-      titleBrand: "UEFI Studio",
-      favicon: { href: favicon, mime: "image/svg+xml" },
-      backdrop: {
-        imageLight, imageDark, overlayLight: null, overlayDark: null, blur: blurPx,
-        desktopBlur: { light: desktopBlurPx, dark: desktopBlurPx },
+  const table = {
+    bodyAttribute: "dshUefiHarness",
+    titleBrand: "UEFI Studio",
+    favicon: { href: favicon, mime: "image/svg+xml" },
+    anchor: 55,
+    riding: RIDING,
+    constantTokens: null,
+    scrim: {
+      kind: "baked-gradient",
+      stops: {
+        light: [["248, 247, 255", 10], ["238, 234, 255", 22]],
+        dark: [["23, 18, 45", 8], ["16, 12, 34", 20]],
       },
-      tokenOverrides,
-      cssVariables: blurPx > 0 ? { "--dsh-uefi-glass-blur": { light: `${blurPx}px`, dark: `${blurPx}px` } } : null,
-      staticCss: blurPx > 0 ? css + "\n" + GLASS_RULE : css,
-      decorations: null,
-    };
-  }
+      artLayer,
+    },
+    blur: { max: 24 },
+    glassVar: "--dsh-uefi-glass-blur",
+    desktopBlur: { rate: 55, dark: "boost" },
+    wallpaper: {
+      kind: "legacy-baked",
+      sentinel: "builtin:uefi-harness:art",
+      placeholder: null,
+    },
+    staticCss: css,
+  };
+
+  const project = createProjection(table);
 
   return {
     id: "uefi-harness",
@@ -1179,6 +1164,10 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] :is([class*="oRe1gG_bubble"], [c
     scrimLight: SCRIM_LIGHT,
     scrimDark: SCRIM_DARK,
     slogans: SLOGANS,
+    builtinAssets: {
+      // ADR-0014（B15）：显式声明，替代 index.js 的 legacy 合成补底。
+      art: { mime: "image/webp", url: BACKGROUND_ART },
+    },
     project,
   };
 }
