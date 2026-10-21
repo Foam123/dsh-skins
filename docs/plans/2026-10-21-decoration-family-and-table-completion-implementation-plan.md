@@ -198,7 +198,7 @@ export function rootClear(scope)
 - [ ] Step 1: `developers.md`：①「自建一套皮肤」配方增装饰族段（decoration.js 各生成器一行调用 + palette 表）；②「实现耦合的已知边界」`.gdEzaW_bubble` 过期注修正为当前哈希 `Sixlwa_bubble` 事实 + 单源指向 decoration.js。
 - [ ] Step 2: 全门禁 `pnpm run check`（构建 + lint + 测试 + README 配对 + bundle 守卫 + 上游钩子守卫 + lib-sync 零差异）。注意 bundle 守卫只有**上限**（`BASELINE_CLIENT_BYTES + base64 + SLACK`，exceeds 才报；C1 为同文件搬移、bundle 字节近似持平）——若超上限按守卫脚本自身的 bump 规程处理（G0 外围，执行时如遇先停下说明）。
 - [ ] Step 3: 收尾判据：`! grep -rn "Sixlwa\|oRe1gG\|userStack" src/client/skins/openbmc-harness src/client/skins/uefi-harness src/client/skins/meirenzhi scripts` 全零（唯一来源 decoration.js；测试 golden 字节豁免）；ADR-0011 Amendments 已在 Task 0 提交，无需再动。
-- [ ] Step 4: checkpoint：`docs(dev): developers.md 装饰族配方 + 边界注修正（ADR-0016 收尾）`（纯文档，无需构建）。**执行期口径修正（2026-10-22，产出评审 R1-2）**：实际 checkpoint 除文档外还包含 ① G0-3 的 personalization-projector 两处断言值级迁移（主人当日批准，见 G0-4）；② 守卫三处 userStack 散文提常量化（Task 1 Step 4 的 verdict 文案派生残尾——strict 模式行已在 Task 1 派生，desktop 模式行与注释散文顺延至本步收尾判据暴露时补齐）。scripts 与 tests 均不入 lib，故「无需重建 lib」仍成立；commit body 已如实记录全部内容。
+- [ ] Step 4: checkpoint：`docs(dev): developers.md 装饰族配方 + 边界注修正（ADR-0016 收尾）`（纯文档，无需构建）。**执行期口径修正（2026-10-22，产出评审 R1-2）**：实际 checkpoint 除文档外还包含 ① G0-3 的 personalization-projector 两处断言值级迁移（主人当日批准，见 G0 清单第 4 条）；② 守卫三处 userStack 散文提常量化（Task 1 Step 4 的 verdict 文案派生残尾——strict 模式行已在 Task 1 派生，desktop 模式行与注释散文顺延至本步收尾判据暴露时补齐）。scripts 与 tests 均不入 lib，故「无需重建 lib」仍成立；commit body 已如实记录全部内容。
 
 ## 执行纪律
 
