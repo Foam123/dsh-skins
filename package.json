@@ -72,13 +72,14 @@
     "verify:readme": "node scripts/verify-readme-pairing.mjs",
     "verify:bundle": "node scripts/verify-bundle-guard.mjs",
     "verify:hooks": "node scripts/verify-upstream-hooks.mjs",
-    "check": "pnpm run check:lockfile && pnpm run build && node --check lib/client.js && node --check lib/index.js && pnpm run lint:tests && pnpm run test && pnpm run verify:readme && pnpm run verify:bundle && pnpm run verify:hooks && git diff --exit-code -- lib/index.js lib/client.js",
-    "lint:tests": "eslint tests/"
+    "check": "pnpm run check:lockfile && pnpm run build && node --check lib/client.js && node --check lib/index.js && pnpm run lint && pnpm run test && pnpm run verify:readme && pnpm run verify:bundle && pnpm run verify:hooks && git diff --exit-code -- lib/index.js lib/client.js",
+    "lint": "eslint ."
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
     "esbuild": "^0.28.2",
     "eslint": "^10.13.0",
+    "globals": "^17.13.0",
     "playwright-core": "1.62.1",
     "semver": "^7.8.5"
   }
