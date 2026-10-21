@@ -1,25 +1,44 @@
 /**
- * Repo-side static pins for the bubble-decoration hook (ADR-0006) and the
- * shell-frame alignment (ADR-0009): the built client must carry those
- * selectors exactly as designed and must never re-pin a dead hash. Runtime-side
- * hook drift is covered by scripts/verify-upstream-hooks.mjs; this file pins
- * the repo side.
+ * Repo-side pins for the bubble-decoration hook (ADR-0006) and the shell-frame
+ * alignment (ADR-0009). The bubble unions' WIRING truth is runtime-evaluated
+ * (ADR-0016 amendment, B-1 ruling ①): each skin factory's
+ * project(factory-anchor).staticCss must ship both unions exactly twice —
+ * counting the built lib's static bytes can no longer see the generated rules,
+ * because the union strings live only as interpolated fragments inside
+ * src/client/skins/decoration.js. The hashes themselves are imported from
+ * BUBBLE_HOOKS (single source, shared with the guard). The shell-frame,
+ * scope-marker and dead-hash tests below still pin the built lib/client.js
+ * bytes. Runtime-side hook drift is covered by
+ * scripts/verify-upstream-hooks.mjs; this file pins the repo side.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { BUBBLE_HOOKS } from "../src/client/skins/decoration.js";
+import { createOpenBmcHarness } from "../src/client/skins/openbmc-harness/index.js";
+import { createUefiHarness } from "../src/client/skins/uefi-harness/index.js";
+import { createMeirenzhiSkin } from "../src/client/skins/meirenzhi/index.js";
+import { jsx } from "./fake-react.mjs";
 
 const client = readFileSync("lib/client.js", "utf8");
-const UNION = ':is([class*="Sixlwa_bubble"], [class*="userStack"] > [class*="_bubble"])';
-const GOAL_UNION = ':is([class*="oRe1gG_bubble"], [class*="_stack"] > [class*="_bubble"])';
+const UNION = `:is([class*="${BUBBLE_HOOKS.chat.exact}"], [class*="${BUBBLE_HOOKS.chat.container}"] > [class*="${BUBBLE_HOOKS.bubbleLocal}"])`;
+const GOAL_UNION = `:is([class*="${BUBBLE_HOOKS.goal.exact}"], [class*="${BUBBLE_HOOKS.goal.container}"] > [class*="${BUBBLE_HOOKS.bubbleLocal}"])`;
 
-test("bubble decoration: union selector ships in all three skins (light + dark)", () => {
+test("bubble decoration: both unions ship twice per skin (light + dark) — wiring truth, runtime-evaluated", () => {
 	// 2 rules per skin × 3 skins, per surface (chat user bubble + goal-panel
 	// bubble, v1.0.4) — the exact-hash and structural branches always ship
-	// together; a skin missing a union is a fix regression. (v1.4.0 removed
-	// the tgcf skin: 8 → 6 occurrences.)
-	assert.equal(client.split(UNION).length - 1, 6, "chat user-bubble union");
-	assert.equal(client.split(GOAL_UNION).length - 1, 6, "goal-panel bubble union");
+	// together; a skin missing a union (or forgetting to call decorationCss)
+	// is a fix regression. (v1.4.0 removed the tgcf skin: 8 → 6 occurrences.)
+	const skins = [
+		["openbmc", createOpenBmcHarness({ jsx }), 55],
+		["uefi-harness", createUefiHarness({ jsx }), 55],
+		["meirenzhi", createMeirenzhiSkin({ jsx }), 35],
+	];
+	for (const [id, skin, anchor] of skins) {
+		const css = skin.project({ panelOpacity: anchor }).staticCss;
+		assert.equal(css.split(UNION).length - 1, 2, `${id} chat user-bubble union`);
+		assert.equal(css.split(GOAL_UNION).length - 1, 2, `${id} goal-panel bubble union`);
+	}
 });
 
 test("Desktop backdrop bundle carries the public marker and all stable skin scopes", () => {

@@ -11,19 +11,23 @@
  * hook drift fails `check` at upgrade time instead of being discovered by
  * eye weeks later.
  *
- * Manifest (keep in sync with the selectors in src/client/skins/*)
- * (frost-family overlay selectors are now centralized in
- * src/client/skins/frost-family.js, ADR-0012):
- *   1. exact-hash   .Sixlwa_bubble still exists in dsh-client-ui-chat
+ * Manifest — the bubble hashes/containers below are imported from the single
+ * source src/client/skins/decoration.js (BUBBLE_HOOKS, ADR-0016): guard and
+ * skins consume the same object, so a hash re-derivation is a one-file edit
+ * (the ADR-0011 Q3 "keep in sync" comment discipline is retired by
+ * construction). Overlay selectors live in src/client/skins/frost-family.js
+ * (ADR-0012):
+ *   1. exact-hash   BUBBLE_HOOKS.chat.exact still exists in dsh-client-ui-chat
  *                   (union branch 1; ADR-0006)
  *   2. structural   the chat module still has exactly one *_bubble class
  *                   (the user bubble) and a *userStack* container class
  *                   (union branch 2 preconditions)
- *   2b. goal        the goal-panel bubble hook: oRe1gG_bubble exact hash and
- *                   a *_stack container class (ADR-0006 v1.0.4 amendment)
+ *   2b. goal        the goal-panel bubble hook: BUBBLE_HOOKS.goal.exact hash
+ *                   and a *_stack container class (ADR-0006 v1.0.4 amendment)
  *   3. whitelist    the page-wide *_bubble inventory across every installed
- *                   @deepseek-ai package stays ⊆ {Sixlwa_bubble,
- *                   oRe1gG_bubble}; a new _bubble class is a new
+ *                   @deepseek-ai package stays ⊆ {BUBBLE_HOOKS.chat.exact,
+ *                   BUBBLE_HOOKS.goal.exact, ROF66W_bubble (reviewed upstream
+ *                   reply bubble, see below)}; a new _bubble class is a new
  *                   false-positive surface for [class*="_bubble"] and forces
  *                   a re-review instead of silently widening the selector
  *   4. dark hook    body[data-ds-dark-theme] is still shipped by the theme
@@ -75,6 +79,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { BUBBLE_HOOKS } from "../src/client/skins/decoration.js";
 
 const YELLOW = process.stderr.isTTY ? "\x1b[33m" : "";
 const RED = process.stderr.isTTY ? "\x1b[31m" : "";
@@ -136,11 +141,11 @@ if (chat === "") {
 	// 1. exact-hash branch (strict/web mode only)
 	const chatBubbles = [...new Set(chat.match(BUBBLE_TOKEN) ?? [])];
 	if (!directAsarLayout) {
-		if (!chat.includes("Sixlwa_bubble")) {
-			problems.push('exact-hash branch dead: "Sixlwa_bubble" no longer in dsh-client-ui-chat — re-derive the hash and update src/client/skins/* (ADR-0006)');
+		if (!chat.includes(BUBBLE_HOOKS.chat.exact)) {
+			problems.push(`exact-hash branch dead: "${BUBBLE_HOOKS.chat.exact}" no longer in dsh-client-ui-chat — re-derive the hash and update BUBBLE_HOOKS in src/client/skins/decoration.js (ADR-0006/0016)`);
 		}
-		if (chatBubbles.length !== 1 || chatBubbles[0] !== "Sixlwa_bubble") {
-			problems.push(`chat module *_bubble inventory is [${chatBubbles.join(", ")}], expected exactly [Sixlwa_bubble] — the structural branch's "the only _bubble under userStack is the user bubble" premise needs re-review (ADR-0006)`);
+		if (chatBubbles.length !== 1 || chatBubbles[0] !== BUBBLE_HOOKS.chat.exact) {
+			problems.push(`chat module *_bubble inventory is [${chatBubbles.join(", ")}], expected exactly [${BUBBLE_HOOKS.chat.exact}] — the structural branch's "the only _bubble under ${BUBBLE_HOOKS.chat.container} is the user bubble" premise needs re-review (ADR-0006)`);
 		}
 	} else {
 		// structural mode (desktop asar): the fallback branch must stand alone.
@@ -150,8 +155,8 @@ if (chat === "") {
 		}
 	}
 	// 2. structural-branch preconditions (both modes)
-	if (!/[A-Za-z0-9]*userStack/.test(chat)) {
-		problems.push('structural branch dead: no *userStack* class in dsh-client-ui-chat — the "userStack > bubble" DOM shape changed (ADR-0006)');
+	if (!new RegExp(`[A-Za-z0-9]*${BUBBLE_HOOKS.chat.container}`).test(chat)) {
+		problems.push(`structural branch dead: no *${BUBBLE_HOOKS.chat.container}* class in dsh-client-ui-chat — the "${BUBBLE_HOOKS.chat.container} > bubble" DOM shape changed (ADR-0006)`);
 	}
 }
 
@@ -162,16 +167,16 @@ if (goal === "") {
 } else {
 	const goalBubbles = [...new Set(goal.match(BUBBLE_TOKEN) ?? [])];
 	if (!directAsarLayout) {
-		if (!goal.includes("oRe1gG_bubble")) {
-			problems.push('goal exact-hash branch dead: "oRe1gG_bubble" no longer in dsh-client-ui-goal — re-derive the hash and update src/client/skins/* (ADR-0006 amendment)');
+		if (!goal.includes(BUBBLE_HOOKS.goal.exact)) {
+			problems.push(`goal exact-hash branch dead: "${BUBBLE_HOOKS.goal.exact}" no longer in dsh-client-ui-goal — re-derive the hash and update BUBBLE_HOOKS in src/client/skins/decoration.js (ADR-0006 amendment/0016)`);
 		}
 	} else {
 		if (goalBubbles.length !== 1) {
 			problems.push(`goal module *_bubble inventory is [${goalBubbles.join(", ")}], expected exactly one — the "stack > bubble" structural premise needs re-review (ADR-0006 amendment)`);
 		}
 	}
-	if (!/[A-Za-z0-9]*_stack/.test(goal)) {
-		problems.push('goal structural branch dead: no *_stack container class in dsh-client-ui-goal — the "stack > bubble" DOM shape changed (ADR-0006 amendment)');
+	if (!new RegExp(`[A-Za-z0-9]*${BUBBLE_HOOKS.goal.container}`).test(goal)) {
+		problems.push(`goal structural branch dead: no *${BUBBLE_HOOKS.goal.container} container class in dsh-client-ui-goal — the "stack > bubble" DOM shape changed (ADR-0006 amendment)`);
 	}
 }
 
@@ -182,7 +187,7 @@ if (goal === "") {
 // Structural mode (desktop asar) swaps the fixed whitelist for the runtime's
 // OWN observed chat/goal/reply families: extra families are still a
 // structural-premise break, "vanished" pins are a web-runtime notion only.
-const BUBBLE_WHITELIST = new Set(["Sixlwa_bubble", "oRe1gG_bubble", "ROF66W_bubble"]);
+const BUBBLE_WHITELIST = new Set([BUBBLE_HOOKS.chat.exact, BUBBLE_HOOKS.goal.exact, "ROF66W_bubble"]);
 const foundBubbles = new Map(); // token -> Set<pkg>
 for (const [pkg, files] of packages) {
 	for (const file of files) {
@@ -419,7 +424,7 @@ if (problems.length > 0) {
 const bubbles = [...foundBubbles.keys()].sort().join(", ");
 const bubbleSummary = directAsarLayout
 	? `desktop structural mode: single-bubble inventories + userStack/_stack containers alive; page *_bubble = {${bubbles}}`
-	: `Sixlwa_bubble alive; chat *_bubble = [Sixlwa_bubble]; userStack alive; goal oRe1gG_bubble + _stack alive; page *_bubble = {${bubbles}}`;
+	: `${BUBBLE_HOOKS.chat.exact} alive; chat *_bubble = [${BUBBLE_HOOKS.chat.exact}]; ${BUBBLE_HOOKS.chat.container} alive; goal ${BUBBLE_HOOKS.goal.exact} + ${BUBBLE_HOOKS.goal.container} alive; page *_bubble = {${bubbles}}`;
 const modeSummary = directAsarLayout ? "structural-mode (desktop asar layout)" : "strict-mode (pnpm store layout)";
 const overlaySummary = frontendChecked
 	? "overlay hooks alive (_float_/_dialog_/_pane_/_float* whitelist/mask+menu tokens + slots module map)"

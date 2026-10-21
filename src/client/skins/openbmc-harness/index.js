@@ -1,6 +1,7 @@
 /** Independent OpenBMC Studio skin (id: openbmc). */
 import { frostFamilyCss } from "../frost-family.js";
 import { createProjection, ridingDecl } from "../translucency.js";
+import { decorationCss } from "../decoration.js";
 
 export function createOpenBmcHarness(jsxRuntime) {
   const { jsx } = jsxRuntime;
@@ -271,30 +272,11 @@ export function createOpenBmcHarness(jsxRuntime) {
   body[data-dsh-openbmc-skin][data-ds-dark-theme] {
     /* 暗色气泡填充由 ③ 暗色块的深冰蓝接管（rgba(20,41,60,.90)），此处不再重定义 */
   }
-  /* 用户气泡描边 + 轻投影（框出用户输入区）。挂接用 :is() 并集（精确哈希 ∪
-   * 结构化，见 docs/adr/0006）：哈希漂移与 DOM 结构变化两种单点故障各有一支
-   * 兜底，钩子前提由 verify-upstream-hooks 守卫在 check 时钉住。失效仅影响
-   * 描边装饰，token 填充仍然生效；结构分支不命中 goal 面板气泡（其容器
-   * _stack 不含 userStack 子串，ADR-0006 实测），goal 维持不描边。 */
-  body[data-dsh-openbmc-skin] :is([class*="Sixlwa_bubble"], [class*="userStack"] > [class*="_bubble"]) {
-    border: 1px solid rgba(0, 131, 176, 0.38);
-    box-shadow: 0 1px 4px rgba(0, 131, 176, 0.10);
-  }
-  body[data-dsh-openbmc-skin][data-ds-dark-theme] :is([class*="Sixlwa_bubble"], [class*="userStack"] > [class*="_bubble"]) {
-    border-color: rgba(62, 193, 232, 0.38);
-    box-shadow: 0 1px 6px rgba(62, 193, 232, 0.10);
-  }
-  /* 目标面板气泡（goal stack > bubble，与用户气泡同族描边）。ADR-0006
-   * v1.0.4 amendment：主人目测 goal 无描边观感不佳，裁决扩入；同款并集
-   * 策略，守卫清单已登记 goal 精确哈希与 _stack 结构前提。 */
-  body[data-dsh-openbmc-skin] :is([class*="oRe1gG_bubble"], [class*="_stack"] > [class*="_bubble"]) {
-    border: 1px solid rgba(0, 131, 176, 0.38);
-    box-shadow: 0 1px 4px rgba(0, 131, 176, 0.10);
-  }
-  body[data-dsh-openbmc-skin][data-ds-dark-theme] :is([class*="oRe1gG_bubble"], [class*="_stack"] > [class*="_bubble"]) {
-    border-color: rgba(62, 193, 232, 0.38);
-    box-shadow: 0 1px 6px rgba(62, 193, 232, 0.10);
-  }
+  /* 用户+目标气泡描边（ADR-0006 并集挂接谱系，goal v1.0.4 扩入；结构分支
+   * 不命中 goal 面板气泡、goal 经自己的 _stack 并集描边——全谱系说明见
+   * ../decoration.js 头注）：规则唯一来源在 decoration.js（ADR-0016），
+   * 本皮肤只持描边色。 */
+  ${decorationCss("body[data-dsh-openbmc-skin]", { light: "0, 131, 176", dark: "62, 193, 232" })}
   /* 助手消息流式输出中：左侧品牌色呼吸光条（box-shadow 不产生布局位移） */
   body[data-dsh-openbmc-skin] [data-streaming] {
     border-radius: 4px;

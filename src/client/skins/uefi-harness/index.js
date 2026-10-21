@@ -7,6 +7,7 @@
  */
 import { frostFamilyCss } from "../frost-family.js";
 import { createProjection, ridingDecl } from "../translucency.js";
+import { decorationCss } from "../decoration.js";
 
 // Official UEFI Forum logo — the red cube with white "uefi" letters, embedded
 // as two vector paths traced from uefi.org's published uefi_logo_red.gif
@@ -131,29 +132,10 @@ body[data-dsh-uefi-harness] [data-streaming] {
   border-radius: 4px;
   box-shadow: inset 3px 0 0 var(--dsw-alias-brand-primary);
 }
-/* 用户气泡描边 + 轻投影（openbmc 同款泡泡边框：框出用户输入区）。挂接用
- * :is() 并集（精确哈希 ∪ 结构化，见 docs/adr/0006）：哈希漂移与 DOM 结构
- * 变化两种单点故障各有一支兜底，钩子前提由 verify-upstream-hooks 守卫在
- * check 时钉住。失效仅影响描边装饰，token 填充仍然生效。 */
-body[data-dsh-uefi-harness] :is([class*="Sixlwa_bubble"], [class*="userStack"] > [class*="_bubble"]) {
-  border: 1px solid rgba(101, 83, 216, 0.38);
-  box-shadow: 0 1px 4px rgba(101, 83, 216, 0.10);
-}
-body[data-dsh-uefi-harness][data-ds-dark-theme] :is([class*="Sixlwa_bubble"], [class*="userStack"] > [class*="_bubble"]) {
-  border-color: rgba(169, 156, 255, 0.38);
-  box-shadow: 0 1px 6px rgba(169, 156, 255, 0.10);
-}
-/* 目标面板气泡（goal stack > bubble，与用户气泡同族描边）。ADR-0006
- * v1.0.4 amendment：主人目测 goal 无描边观感不佳，裁决扩入；同款并集
- * 策略，守卫清单已登记 goal 精确哈希与 _stack 结构前提。 */
-body[data-dsh-uefi-harness] :is([class*="oRe1gG_bubble"], [class*="_stack"] > [class*="_bubble"]) {
-  border: 1px solid rgba(101, 83, 216, 0.38);
-  box-shadow: 0 1px 4px rgba(101, 83, 216, 0.10);
-}
-body[data-dsh-uefi-harness][data-ds-dark-theme] :is([class*="oRe1gG_bubble"], [class*="_stack"] > [class*="_bubble"]) {
-  border-color: rgba(169, 156, 255, 0.38);
-  box-shadow: 0 1px 6px rgba(169, 156, 255, 0.10);
-}
+/* 用户+目标气泡描边（ADR-0006 并集挂接谱系，goal v1.0.4 扩入——全谱系说明
+ * 见 ../decoration.js 头注）：规则唯一来源在 decoration.js（ADR-0016），
+ * 本皮肤只持描边色。 */
+${decorationCss("body[data-dsh-uefi-harness]", { light: "101, 83, 216", dark: "169, 156, 255" })}
 
   ${frostFamilyCss("body[data-dsh-uefi-harness]", TINTS)}
 
