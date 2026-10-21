@@ -1,7 +1,7 @@
 /** Independent OpenBMC Studio skin (id: openbmc). */
 import { frostFamilyCss } from "../frost-family.js";
 import { createProjection, ridingDecl } from "../translucency.js";
-import { decorationCss, badgeCss, rootClear } from "../decoration.js";
+import { decorationCss, badgeCss, rootClear, streamingCss } from "../decoration.js";
 
 export function createOpenBmcHarness(jsxRuntime) {
   const { jsx } = jsxRuntime;
@@ -202,20 +202,10 @@ export function createOpenBmcHarness(jsxRuntime) {
    * ../decoration.js 头注）：规则唯一来源在 decoration.js（ADR-0016），
    * 本皮肤只持描边色。 */
   ${decorationCss("body[data-dsh-openbmc-skin]", { light: "0, 131, 176", dark: "62, 193, 232" })}
-  /* 助手消息流式输出中：左侧品牌色呼吸光条（box-shadow 不产生布局位移） */
-  body[data-dsh-openbmc-skin] [data-streaming] {
-    border-radius: 4px;
-    box-shadow: inset 3px 0 0 0 var(--dsw-alias-brand-primary);
-  }
-  @keyframes obmc-stream-pulse {
-    from { box-shadow: inset 3px 0 0 0 var(--dsw-alias-brand-primary); }
-    to { box-shadow: inset 3px 0 0 0 rgba(62, 193, 232, 0.20); }
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    body[data-dsh-openbmc-skin] [data-streaming] {
-  animation: obmc-stream-pulse 1.6s ease-in-out infinite alternate;
-    }
-  }
+  /* 助手消息流式输出中：左侧品牌色呼吸光条——规则唯一来源在
+   * ../decoration.js streamingCss（ADR-0016 视觉窗口；keyframes 家族化改名
+   * obmc-stream-pulse → dsh-skins-stream-pulse，像素不变）。 */
+  ${streamingCss("body[data-dsh-openbmc-skin]", { decay: "62, 193, 232" })}
   /* ---------- ⑦ 根容器清底（防御，鲸吟同款家族化 ADR-0016；滚动条同系
    * token 已随常量族迁声明表） ---------- */
   ${rootClear("body[data-dsh-openbmc-skin]")}

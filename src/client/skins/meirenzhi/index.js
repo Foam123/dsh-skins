@@ -24,7 +24,7 @@ import {
 } from "./wallpapers.js";
 import { frostFamilyCss } from "../frost-family.js";
 import { createProjection } from "../translucency.js";
-import { decorationCss, badgeCss, rootClear } from "../decoration.js";
+import { decorationCss, badgeCss, rootClear, streamingCss } from "../decoration.js";
 
 const SCOPE = "body[data-dsh-meirenzhi-skin]";
 
@@ -50,6 +50,10 @@ const CSS = [
   decorationCss(SCOPE, { light: "184, 67, 63", dark: "229, 138, 128" }),
   // 防御性根容器清底（ADR-0016 Q12）：上游 #root 现无背景，今日 no-op。
   rootClear(SCOPE),
+  // 流式呼吸光条（ADR-0016 视觉窗口，本皮新增）：品牌令牌骨架 + 鎏金衰减
+  // rgba(217, 180, 92, 0.20)（Q10 主人裁定例外，与萤火虫同源色）——规则
+  // 唯一来源在 ../decoration.js streamingCss。
+  streamingCss(SCOPE, { decay: "217, 180, 92" }),
   // Ambient motion: a slow glow-breath riding the runtime's wallpaper ::before
   // layer + two drifting fireflies on the #root pseudo budget (same shape and
   // cost as the tgcf butterflies); prefers-reduced-motion kills all of it.

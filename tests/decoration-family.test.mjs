@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BUBBLE_HOOKS, decorationCss, badgeCss, rootClear } from "../src/client/skins/decoration.js";
+import { BUBBLE_HOOKS, decorationCss, badgeCss, rootClear, streamingCss } from "../src/client/skins/decoration.js";
 
 const MRZ_SCOPE = "body[data-dsh-meirenzhi-skin]";
 const MRZ_PALETTE = { light: "184, 67, 63", dark: "229, 138, 128" };
@@ -98,4 +98,28 @@ test("rootClear: one defensive rule per scope, identical modulo scope", () => {
     rootClear("body[data-dsh-uefi-harness]"),
     expected.split(MRZ_SCOPE).join("body[data-dsh-uefi-harness]"),
   );
+});
+
+test("streamingCss: family keyframes, decay injection, reduced-motion fallback (ADR-0016 Q10/Q16)", () => {
+  const DECAYS = {
+    openbmc: "62, 193, 232",
+    uefi: "169, 156, 255",
+    meirenzhi: "217, 180, 92",
+  };
+  const outs = {
+    openbmc: streamingCss("body[data-dsh-openbmc-skin]", { decay: DECAYS.openbmc }),
+    uefi: streamingCss("body[data-dsh-uefi-harness]", { decay: DECAYS.uefi }),
+    meirenzhi: streamingCss(MRZ_SCOPE, { decay: DECAYS.meirenzhi }),
+  };
+  for (const [id, css] of Object.entries(outs)) {
+    assert.ok(css.includes("@keyframes dsh-skins-stream-pulse{"), `${id} family keyframes name`);
+    assert.ok(css.includes(`to{box-shadow:inset 3px 0 0 rgba(${DECAYS[id]}, 0.20)}}`), `${id} decay injected @0.20`);
+    assert.ok(css.includes("@media (prefers-reduced-motion: no-preference)"), `${id} reduced-motion gating (static fallback outside)`);
+    assert.ok(css.includes("box-shadow:inset 3px 0 0 var(--dsw-alias-brand-primary)"), `${id} token-driven static skeleton`);
+    assert.ok(!css.includes("obmc-stream-pulse"), `${id} legacy openbmc keyframes name retired`);
+  }
+  // Three skins identical modulo scope + decay.
+  const norm = (css, scope, decay) => css.split(scope).join("«S»").split(decay).join("«D»");
+  assert.equal(norm(outs.openbmc, "body[data-dsh-openbmc-skin]", DECAYS.openbmc), norm(outs.uefi, "body[data-dsh-uefi-harness]", DECAYS.uefi));
+  assert.equal(norm(outs.openbmc, "body[data-dsh-openbmc-skin]", DECAYS.openbmc), norm(outs.meirenzhi, MRZ_SCOPE, DECAYS.meirenzhi));
 });

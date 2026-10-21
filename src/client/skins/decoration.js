@@ -74,3 +74,22 @@ export function badgeCss(scope, className, colors, metrics) {
     `${scope}[data-ds-dark-theme] ${className}{background:${colors.dark.bg};color:${colors.dark.fg}}`,
   ].join("\n");
 }
+
+/**
+ * 流式呼吸光条（ADR-0016 唯一视觉窗口，Q10 全员呼吸版裁决）：助手流式
+ * 输出时当前块左侧一道品牌色光条 + 呼吸脉冲（box-shadow 不产生布局位移），
+ * prefers-reduced-motion 下退化为静态光条。静态骨架走品牌令牌
+ * var(--dsw-alias-brand-primary)，palette 只持呼吸「衰减色」一个自由度：
+ * openbmc/uefi 取各自暗色态品牌主色 @0.20，meirenzhi 取鎏金
+ * rgba(217, 180, 92, 0.20)（Q10 主人裁定例外，与萤火虫同源色）。
+ * 家族 keyframes 名 dsh-skins-stream-pulse（openbmc 旧名 obmc-stream-pulse
+ * 随收拢统一，无任何测试/外部引用）。
+ */
+export function streamingCss(scope, palette) {
+  const KEYFRAMES = "dsh-skins-stream-pulse";
+  return [
+    `${scope} [data-streaming]{border-radius:4px;box-shadow:inset 3px 0 0 var(--dsw-alias-brand-primary)}`,
+    `@keyframes ${KEYFRAMES}{from{box-shadow:inset 3px 0 0 var(--dsw-alias-brand-primary)}to{box-shadow:inset 3px 0 0 rgba(${palette.decay}, 0.20)}}`,
+    `@media (prefers-reduced-motion: no-preference){${scope} [data-streaming]{animation:${KEYFRAMES} 1.6s ease-in-out infinite alternate}}`,
+  ].join("\n");
+}

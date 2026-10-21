@@ -7,7 +7,7 @@
  */
 import { frostFamilyCss } from "../frost-family.js";
 import { createProjection, ridingDecl } from "../translucency.js";
-import { decorationCss, rootClear } from "../decoration.js";
+import { decorationCss, rootClear, streamingCss } from "../decoration.js";
 
 // Official UEFI Forum logo — the red cube with white "uefi" letters, embedded
 // as two vector paths traced from uefi.org's published uefi_logo_red.gif
@@ -97,10 +97,9 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] {
   ${ridingDecl(SPEC, "--dsw-specific-input-major", "dark")}
 }
 ${rootClear("body[data-dsh-uefi-harness]")}
-body[data-dsh-uefi-harness] [data-streaming] {
-  border-radius: 4px;
-  box-shadow: inset 3px 0 0 var(--dsw-alias-brand-primary);
-}
+/* 流式呼吸光条（ADR-0016 视觉窗口：静态版升级呼吸，衰减色 = 暗色品牌主色
+ * @0.20，Q16）：规则唯一来源在 ../decoration.js streamingCss。 */
+${streamingCss("body[data-dsh-uefi-harness]", { decay: "169, 156, 255" })}
 /* 用户+目标气泡描边（ADR-0006 并集挂接谱系，goal v1.0.4 扩入——全谱系说明
  * 见 ../decoration.js 头注）：规则唯一来源在 decoration.js（ADR-0016），
  * 本皮肤只持描边色。 */
