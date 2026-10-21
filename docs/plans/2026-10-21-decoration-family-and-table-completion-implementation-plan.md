@@ -65,6 +65,7 @@ export function rootClear(scope)
   1. `tests/upstream-hooks.test.mjs`：:13-14 钉串改 import 拼装；计数断言按 B-1 裁定①执行——运行时求值（import 三皮工厂 + `tests/fake-react.mjs`，`project(anchor).staticCss` split 计数），G0 扩围经主人 2026-10-21 裁定生效。
   2. `tests/translucency-contract.test.mjs`：**新增** C1 等式 golden（被删行清单 → tokenOverrides 断言）。既有断言面清点结论：该文件既有断言仅围绕 riding 插值行与 glass 规则（:159-168 只迭代 spec.riding；:280-301 只数 ridingDecl 插值），C1 不动 ridingDecl → **既有断言预计零条受影响**；`tests/runtime-effects.test.mjs` 不读 staticCss token 字面量，同预计零受影响。执行中如遇非空受影响断言 → 停下说明，G0 未预授权盲改。
   3. 新建 `tests/decoration-family.test.mjs`（golden + 等价断言）。
+  4. `tests/personalization-projector.test.mjs`（**G0-3，2026-10-22 主人批准补录**）：:255/:312 两处「`--dsw-alias-bg-overlay` 不在 tokenOverrides」通道形状断言，按值级等值迁移——改为钉 constantTokens 值 + P=0/P=100 不变性（tgcf ruling #16 不变量更直接的载体；背景：C1 通道迁移后代理失效，该文件是评审 S-2 断言面清点漏列的第三消费者，执行期全门禁暴露后停下说明获批）。
   - 除上述外，现存测试期望值禁止修改——特别是 `tests/meirenzhi-skin.test.mjs` **零改动**（:56-57 气泡 golden 是 Task 1 验收判据；:49 徽章暗色 golden 受 Task 2 影响但输出逐字节不变、应原样通过）；`smoke-test.cjs` 已核查未钉任何徽章/流式/描边串，预期零改动。实现中需改未列测试 → 停下说明，不猜。
 - **零像素红线（Task 1–4）**：除注释删除与 minified 排版归一外，(选择器, 声明) 对在「去注释 + 去空白」canon 下与收拢前恒等；openbmc/uefi 多行美化段 → 单行的列位差属排版差。
 - 命名沿用 GLOSSARY：「描边装饰层」「气泡哈希漂移」；GLOSSARY 本身零改动、不发明新领域词（ADR-0016 Q6）。

@@ -53,6 +53,15 @@ ${SCOPE}[data-ds-dark-theme] {
   const TINTS = { frost: { light: "R, G, B", dark: "R, G, B" }, menu: { light: "R, G, B", dark: "R, G, B" } };
   const fullCss = `${css}\n${frostFamilyCss(SCOPE, TINTS)}`;
 
+  // 会话装饰族（ADR-0016）：气泡描边 / 流式呼吸光条 / 反色片徽章 / 防御性
+  // root 清底的规则唯一来源在 ../decoration.js，皮肤只注入 scope 与色值：
+  //   decorationCss(SCOPE, { light: "R, G, B", dark: "R, G, B" })        // 用户+goal 气泡描边（必接）
+  //   streamingCss(SCOPE, { decay: "R, G, B" })                          // 流式呼吸光条（必接；衰减色惯例 = 暗色品牌主色）
+  //   badgeCss(SCOPE, ".dsh-my-skin-badge", colors, metrics)             // 反色片徽章（可选；描边风徽章不入族）
+  //   rootClear(SCOPE)                                                   // 防御性根容器清底（必接）
+  // 气泡钩子哈希只住在 decoration.js 的 BUBBLE_HOOKS——上游哈希漂移的重推导
+  // 单点编辑处（守卫 verify-upstream-hooks.mjs 同源消费同一对象）。
+
   // 皮肤声明表（ADR-0013）：投影机制住 ../translucency.js 通透度投影核，
   // 皮肤只持参数。出厂锚 35 同时是随动重基线与模糊铰链的原点（GLOSSARY
   // 「出厂锚」）；desktop 出厂 66 属本文件下方 catalog 的 profile 默认层，
@@ -148,6 +157,6 @@ __DSH_SKINS__.themePreference();       // 浏览器保存的配色偏好；可�
 
 以下边界属于实现细节，从 README 的使用者视角移到这里：
 
-- OpenBMC 用户气泡描边使用版本相关类 `.gdEzaW_bubble`；该类变化只影响描边，token 配色不受影响。
+- OpenBMC 用户气泡描边使用版本相关类 `.Sixlwa_bubble`；该类变化只影响描边，token 配色不受影响。哈希与结构钩子的唯一来源在 `src/client/skins/decoration.js` 的 `BUBBLE_HOOKS`（ADR-0016）：上游重建导致哈希漂移时，重推导只改该对象一处，守卫 `verify-upstream-hooks.mjs` 与 lib 钉测试同源消费、全链路自动同步。
 - 标签页品牌段替换依赖官方 `DocumentTitle` 投影器的固定文案「DeepSeek Harness」与「 — 」分隔符；投影器实现变化时只影响标签页品牌段，其余界面不受影响。
 - 品牌标语经当前 DSH locale 字典接口替换，皮肤卸载时恢复；升级 DSH locale 实现后需要复核。

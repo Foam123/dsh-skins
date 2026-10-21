@@ -252,7 +252,18 @@ test("openbmc projects baked defaults through its own curve (ADR-0004)", async (
     light: "rgba(238, 246, 251, 0.60)",
     dark: "rgba(13, 30, 44, 0.72)",
   });
-  assert.equal("--dsw-alias-bg-overlay" in def.effects.tokenOverrides, false, "floating layers stay fixed (tgcf ruling #16 analogue)");
+  // 浮层不随旋钮联动（tgcf ruling #16）：值级钉住——该 token 自 ADR-0016 C1
+  // 起住声明表 constantTokens（meirenzhi 同形态先例），值恒定、不随 P 变化；
+  // 旧「不在 tokenOverrides」通道形状代理随通道迁移失效（G0-3，2026-10-22）。
+  assert.deepEqual(def.effects.tokenOverrides["--dsw-alias-bg-overlay"], {
+    light: "rgba(250, 252, 253, 0.82)",
+    dark: "rgba(10, 22, 32, 0.88)",
+  }, "floating layers stay fixed — value pin (tgcf ruling #16, ADR-0016 C1)");
+  assert.equal(
+    JSON.stringify(project({ panelOpacity: 0 }).effects.tokenOverrides["--dsw-alias-bg-overlay"]),
+    JSON.stringify(project({ panelOpacity: 100 }).effects.tokenOverrides["--dsw-alias-bg-overlay"]),
+    "floating layer token is P-invariant",
+  );
   assert.equal(def.effects.backdrop.blur, 0, "no frost at the default anchor");
   assert.equal(def.effects.cssVariables, null);
   assert.equal(def.effects.staticCss.includes('backdrop-filter:blur(var(--dsh-openbmc-glass-blur,0px))'), false, "byte-equal static css — no glass rule at default");
@@ -309,7 +320,17 @@ test("uefi-harness projects baked defaults through its own curve (ADR-0004)", as
     light: "rgba(238, 235, 255, 0.60)",
     dark: "rgba(25, 20, 48, 0.72)",
   });
-  assert.equal("--dsw-alias-bg-overlay" in def.effects.tokenOverrides, false, "floating layers stay fixed (tgcf ruling #16 analogue)");
+  // 浮层不随旋钮联动（tgcf ruling #16）：值级钉住（G0-3 等值迁移，同上方
+  // openbmc 注——通道形状代理随 ADR-0016 C1 失效，meirenzhi :435 同款形态）。
+  assert.deepEqual(def.effects.tokenOverrides["--dsw-alias-bg-overlay"], {
+    light: "rgba(252, 251, 255, 0.82)",
+    dark: "rgba(27, 21, 54, 0.88)",
+  }, "floating layers stay fixed — value pin (tgcf ruling #16, ADR-0016 C1)");
+  assert.equal(
+    JSON.stringify(project({ panelOpacity: 0 }).effects.tokenOverrides["--dsw-alias-bg-overlay"]),
+    JSON.stringify(project({ panelOpacity: 100 }).effects.tokenOverrides["--dsw-alias-bg-overlay"]),
+    "floating layer token is P-invariant",
+  );
   assert.equal(def.effects.backdrop.blur, 0, "no frost at the default anchor");
   assert.equal(def.effects.cssVariables, null);
   assert.equal(def.effects.staticCss.includes('backdrop-filter:blur(var(--dsh-uefi-glass-blur,0px))'), false, "byte-equal static css — no glass rule at default");

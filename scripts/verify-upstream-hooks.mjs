@@ -20,8 +20,8 @@
  *   1. exact-hash   BUBBLE_HOOKS.chat.exact still exists in dsh-client-ui-chat
  *                   (union branch 1; ADR-0006)
  *   2. structural   the chat module still has exactly one *_bubble class
- *                   (the user bubble) and a *userStack* container class
- *                   (union branch 2 preconditions)
+ *                   (the user bubble) and the chat container class
+ *                   (BUBBLE_HOOKS.chat.container; union branch 2 preconditions)
  *   2b. goal        the goal-panel bubble hook: BUBBLE_HOOKS.goal.exact hash
  *                   and a *_stack container class (ADR-0006 v1.0.4 amendment)
  *   3. whitelist    the page-wide *_bubble inventory across every installed
@@ -151,7 +151,7 @@ if (chat === "") {
 		// structural mode (desktop asar): the fallback branch must stand alone.
 		console.error(`${YELLOW}upstream-hooks: desktop build bubble hashes [${chatBubbles.join(", ")}] — exact-hash branch not expected to match here (ADR-0006)${RESET}`);
 		if (chatBubbles.length !== 1) {
-			problems.push(`chat module *_bubble inventory is [${chatBubbles.join(", ")}], expected exactly one — the structural branch's "the only _bubble under userStack is the user bubble" premise needs re-review (ADR-0006)`);
+			problems.push(`chat module *_bubble inventory is [${chatBubbles.join(", ")}], expected exactly one — the structural branch's "the only _bubble under ${BUBBLE_HOOKS.chat.container} is the user bubble" premise needs re-review (ADR-0006)`);
 		}
 	}
 	// 2. structural-branch preconditions (both modes)
@@ -183,7 +183,7 @@ if (goal === "") {
 // 3. page-wide *_bubble whitelist
 // ROF66W_bubble (0.2.0-rc.2 audit): user-questions QuestionReplyView reply
 // bubble — themed via --dsw-specific-bubble, its container local name is
-// `_row`, so branch 2 ([class*="userStack"] > …) can never sweep it.
+// `_row`, so the chat structural sweep can never match it.
 // Structural mode (desktop asar) swaps the fixed whitelist for the runtime's
 // OWN observed chat/goal/reply families: extra families are still a
 // structural-premise break, "vanished" pins are a web-runtime notion only.
@@ -423,7 +423,7 @@ if (problems.length > 0) {
 }
 const bubbles = [...foundBubbles.keys()].sort().join(", ");
 const bubbleSummary = directAsarLayout
-	? `desktop structural mode: single-bubble inventories + userStack/_stack containers alive; page *_bubble = {${bubbles}}`
+	? `desktop structural mode: single-bubble inventories + ${BUBBLE_HOOKS.chat.container}/${BUBBLE_HOOKS.goal.container} containers alive; page *_bubble = {${bubbles}}`
 	: `${BUBBLE_HOOKS.chat.exact} alive; chat *_bubble = [${BUBBLE_HOOKS.chat.exact}]; ${BUBBLE_HOOKS.chat.container} alive; goal ${BUBBLE_HOOKS.goal.exact} + ${BUBBLE_HOOKS.goal.container} alive; page *_bubble = {${bubbles}}`;
 const modeSummary = directAsarLayout ? "structural-mode (desktop asar layout)" : "strict-mode (pnpm store layout)";
 const overlaySummary = frontendChecked
