@@ -85,6 +85,12 @@ const YELLOW = process.stderr.isTTY ? "\x1b[33m" : "";
 const RED = process.stderr.isTTY ? "\x1b[31m" : "";
 const RESET = process.stderr.isTTY ? "\x1b[0m" : "";
 
+// BUBBLE_HOOKS values are interpolated into RegExp patterns below; escape
+// metacharacters so a future container/local-name value (re-derivation is the
+// routine maintenance of that object) can never silently change matching
+// semantics (visual-reviewer R1-V1, ADR-0016).
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const runtimeRoot = process.env.DSH_RUNTIME_ROOT || join(homedir(), ".local/share/dsh-runtime");
 const pnpmDir = join(runtimeRoot, "node_modules/.pnpm");
 const directDir = join(runtimeRoot, "node_modules/@deepseek-ai");
@@ -155,7 +161,7 @@ if (chat === "") {
 		}
 	}
 	// 2. structural-branch preconditions (both modes)
-	if (!new RegExp(`[A-Za-z0-9]*${BUBBLE_HOOKS.chat.container}`).test(chat)) {
+	if (!new RegExp(`[A-Za-z0-9]*${escapeRegExp(BUBBLE_HOOKS.chat.container)}`).test(chat)) {
 		problems.push(`structural branch dead: no *${BUBBLE_HOOKS.chat.container}* class in dsh-client-ui-chat — the "${BUBBLE_HOOKS.chat.container} > bubble" DOM shape changed (ADR-0006)`);
 	}
 }
@@ -175,7 +181,7 @@ if (goal === "") {
 			problems.push(`goal module *_bubble inventory is [${goalBubbles.join(", ")}], expected exactly one — the "stack > bubble" structural premise needs re-review (ADR-0006 amendment)`);
 		}
 	}
-	if (!new RegExp(`[A-Za-z0-9]*${BUBBLE_HOOKS.goal.container}`).test(goal)) {
+	if (!new RegExp(`[A-Za-z0-9]*${escapeRegExp(BUBBLE_HOOKS.goal.container)}`).test(goal)) {
 		problems.push(`goal structural branch dead: no *${BUBBLE_HOOKS.goal.container} container class in dsh-client-ui-goal — the "stack > bubble" DOM shape changed (ADR-0006 amendment)`);
 	}
 }
