@@ -300,3 +300,45 @@ test("uefi source: riding declarations single-sourced (14 interpolations, zero h
     );
   }
 });
+
+// ---- ADR-0016 C1: constant tokens live in the declaration table -----------------
+// The golden below is the removed-lines list: every non-ridingDecl declaration
+// that used to live hand-written in the openbmc CSS template (③ light/dark
+// constant blocks, ④ font stack, ⑥ bubble light fill, ⑦ scrollbar). At the
+// factory anchor the projection's tokenOverrides must carry each value
+// verbatim — same computed style through the table channel (meirenzhi-proven).
+
+const OPENBMC_FONT_UI = '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif';
+const OPENBMC_FONT_CODE = '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace';
+const OPENBMC_CONSTANT_TOKENS = {
+  "--dsw-alias-brand-primary": { light: "#0083b0", dark: "#3ec1e8" },
+  "--dsw-alias-brand-primary-invert": { light: "#ffffff", dark: "#06222e" },
+  "--dsw-alias-brand-text": { light: "#007197", dark: "#5ec8e8" },
+  "--dsw-alias-bg-overlay": { light: "rgba(250, 252, 253, 0.82)", dark: "rgba(10, 22, 32, 0.88)" },
+  "--dsw-specific-sidebar-nav-item-hover": { light: "rgba(231, 241, 248, 0.90)", dark: "rgba(18, 41, 58, 0.90)" },
+  "--dsw-specific-sidebar-nav-item-active": { light: "rgba(220, 235, 245, 0.90)", dark: "rgba(20, 47, 68, 0.90)" },
+  "--dsw-specific-sidebar-nav-item-active-accent": { light: "#9cc8e0", dark: "#29526f" },
+  "--dsw-specific-selector": { light: "rgba(227, 239, 247, 0.85)", dark: "rgba(16, 40, 64, 0.85)" },
+  "--dsw-specific-tip": { light: "rgba(240, 246, 250, 0.90)", dark: "rgba(12, 30, 44, 0.92)" },
+  "--dsw-alias-label-primary": { light: "#16262e", dark: "#dde9ee" },
+  "--dsw-alias-label-secondary": { light: "#3f5a66", dark: "#9fb4bd" },
+  "--dsw-alias-label-dimmed": { light: "#6b838e", dark: "#69818c" },
+  "--dsw-alias-interactive-bg-hover": { light: "rgba(0, 138, 191, 0.08)", dark: "rgba(62, 193, 232, 0.10)" },
+  "--dsw-alias-interactive-bg-active": { light: "rgba(0, 138, 191, 0.14)", dark: "rgba(62, 193, 232, 0.16)" },
+  "--dsw-alias-interactive-bg-hover-accent": { light: "rgba(140, 206, 63, 0.14)", dark: "rgba(165, 212, 64, 0.16)" },
+  "--dsw-specific-bubble": { light: "rgba(0, 138, 191, 0.10)", dark: "rgba(20, 41, 60, 0.90)" },
+  "--dsw-specific-bubble-highlight": { light: "rgba(0, 138, 191, 0.18)", dark: "rgba(29, 61, 85, 0.90)" },
+  "--dsw-font-family": { light: OPENBMC_FONT_UI, dark: OPENBMC_FONT_UI },
+  "--ds-font-family-code": { light: OPENBMC_FONT_CODE, dark: OPENBMC_FONT_CODE },
+  "--dsh-scrollbar-thumb": { light: "var(--dsw-alias-scrollbar-bg-l2)", dark: "var(--dsw-alias-scrollbar-bg-l2)" },
+  "--dsh-scrollbar-thumb-hover": { light: "var(--dsw-alias-scrollbar-hover-l2)", dark: "var(--dsw-alias-scrollbar-hover-l2)" },
+};
+
+test("openbmc C1: constant tokens live in the declaration table, values verbatim (ADR-0016)", () => {
+  const fx = projectorFor("openbmc")(GOLD.openbmc.anchor);
+  for (const [token, modes] of Object.entries(OPENBMC_CONSTANT_TOKENS)) {
+    for (const mode of ["light", "dark"]) {
+      assert.equal(fx.tokenOverrides[token]?.[mode], modes[mode], `openbmc ${token} ${mode} @anchor`);
+    }
+  }
+});

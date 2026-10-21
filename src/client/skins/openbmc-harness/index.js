@@ -163,88 +163,28 @@ export function createOpenBmcHarness(jsxRuntime) {
   const SPEC = { anchor: 55, riding: RIDING }; // ridingDecl 只读这两项，与声明表共享引用
 
   const CSS = `
-  /* ---------- ③ 配色 · 亮色 ---------- */
+  /* ---------- ③ 配色：常量族已迁声明表 constantTokens（ADR-0016 C1），
+     此处只留随动族 ridingDecl 插值行（ADR-0004 锚点字节不变式的载体） ---------- */
   body[data-dsh-openbmc-skin] {
-    /* 品牌主色（按钮/高亮/选中/链接） */
-    --dsw-alias-brand-primary: #0083b0;
-    --dsw-alias-brand-primary-invert: #ffffff;
-    --dsw-alias-brand-text: #007197;
-
-    /* 表面/背景（低不透明度 → 背景画透光；overlay 浮层保持较实） */
     ${ridingDecl(SPEC, "--dsw-alias-bg-base", "light")}
-    --dsw-alias-bg-overlay: rgba(250, 252, 253, 0.82);
     ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "light")}
     ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "light")}
     ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "light")}
     ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "light")}
-
-    /* 侧栏列 + 顶栏标题行（冰白透纱，与背景画同调） */
     ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "light")}
-    --dsw-specific-sidebar-nav-item-hover: rgba(231, 241, 248, 0.90);
-    --dsw-specific-sidebar-nav-item-active: rgba(220, 235, 245, 0.90);
-    --dsw-specific-sidebar-nav-item-active-accent: #9cc8e0;
-
-    /* 输入/菜单/选择器/提示 同系冰蓝。（菜单面三件套经 frost-family.js 家族段统一接管） */
     ${ridingDecl(SPEC, "--dsw-specific-input-major", "light")}
     ${ridingDecl(SPEC, "--dsw-specific-login-input", "light")}
-    --dsw-specific-selector: rgba(227, 239, 247, 0.85);
-    --dsw-specific-tip: rgba(240, 246, 250, 0.90);
-
-    /* 文字层级 */
-    --dsw-alias-label-primary: #16262e;
-    --dsw-alias-label-secondary: #3f5a66;
-    --dsw-alias-label-dimmed: #6b838e;
-
-    /* 交互态（品牌蓝） */
-    --dsw-alias-interactive-bg-hover: rgba(0, 138, 191, 0.08);
-    --dsw-alias-interactive-bg-active: rgba(0, 138, 191, 0.14);
-    --dsw-alias-interactive-bg-hover-accent: rgba(140, 206, 63, 0.14); /* 绿点缀 */
   }
 
-  /* ---------- ③ 配色 · 暗色（跟随系统明暗） ---------- */
   body[data-dsh-openbmc-skin][data-ds-dark-theme] {
-    --dsw-alias-brand-primary: #3ec1e8;
-    --dsw-alias-brand-primary-invert: #06222e;
-    --dsw-alias-brand-text: #5ec8e8;
-
     ${ridingDecl(SPEC, "--dsw-alias-bg-base", "dark")}
-    --dsw-alias-bg-overlay: rgba(10, 22, 32, 0.88);
     ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "dark")}
     ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "dark")}
     ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "dark")}
     ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "dark")}
-
-    /* 侧栏列 + 顶栏标题行：深冰蓝海军（与画面同色相，拒绝纯黑） */
     ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "dark")}
-    --dsw-specific-sidebar-nav-item-hover: rgba(18, 41, 58, 0.90);
-    --dsw-specific-sidebar-nav-item-active: rgba(20, 47, 68, 0.90);
-    --dsw-specific-sidebar-nav-item-active-accent: #29526f;
-
-    /* 输入/菜单/选择器/提示 同系深冰蓝（菜单面三件套经 frost-family.js 家族段统一接管） */
     ${ridingDecl(SPEC, "--dsw-specific-input-major", "dark")}
     ${ridingDecl(SPEC, "--dsw-specific-login-input", "dark")}
-    --dsw-specific-selector: rgba(16, 40, 64, 0.85);
-    --dsw-specific-tip: rgba(12, 30, 44, 0.92);
-
-    /* 用户气泡：深冰蓝（替换此前的中性暗块） */
-    --dsw-specific-bubble: rgba(20, 41, 60, 0.90);
-    --dsw-specific-bubble-highlight: rgba(29, 61, 85, 0.90);
-
-    --dsw-alias-label-primary: #dde9ee;
-    --dsw-alias-label-secondary: #9fb4bd;
-    --dsw-alias-label-dimmed: #69818c;
-
-    --dsw-alias-interactive-bg-hover: rgba(62, 193, 232, 0.10);
-    --dsw-alias-interactive-bg-active: rgba(62, 193, 232, 0.16);
-    --dsw-alias-interactive-bg-hover-accent: rgba(165, 212, 64, 0.16);
-  }
-
-  /* ---------- ④ 字体：系统 UI + 等宽代码 ---------- */
-  body[data-dsh-openbmc-skin] {
-    --dsw-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-  "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
-    --ds-font-family-code: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code",
-  Menlo, Consolas, monospace;
   }
 
   /* ---------- ④b 品牌徽章：官方 ▐HARNESS▌ 同构反色片 ----------
@@ -254,15 +194,9 @@ export function createOpenBmcHarness(jsxRuntime) {
     { light: { bg: "#14202B", fg: "#F7FAFC" }, dark: { bg: "#F7FAFC", fg: "#14202B" } },
     { lineHeight: "14px", fontWeight: 650 })}
 
-  /* ---------- ⑥ 会话气泡装饰：品牌描边 + 流式呼吸光条 ---------- */
-  /* 用户气泡填充换品牌蓝 tint（token 层，随版本稳定） */
-  body[data-dsh-openbmc-skin] {
-    --dsw-specific-bubble: rgba(0, 138, 191, 0.10);
-    --dsw-specific-bubble-highlight: rgba(0, 138, 191, 0.18);
-  }
-  body[data-dsh-openbmc-skin][data-ds-dark-theme] {
-    /* 暗色气泡填充由 ③ 暗色块的深冰蓝接管（rgba(20,41,60,.90)），此处不再重定义 */
-  }
+  /* ---------- ⑥ 会话气泡装饰：品牌描边 + 流式呼吸光条 ----------
+   * 用户气泡填充（明色品牌蓝 tint / 暗色深冰蓝）已随常量族迁声明表
+   * （ADR-0016 C1：--dsw-specific-bubble(-highlight)）。 */
   /* 用户+目标气泡描边（ADR-0006 并集挂接谱系，goal v1.0.4 扩入；结构分支
    * 不命中 goal 面板气泡、goal 经自己的 _stack 并集描边——全谱系说明见
    * ../decoration.js 头注）：规则唯一来源在 decoration.js（ADR-0016），
@@ -282,12 +216,9 @@ export function createOpenBmcHarness(jsxRuntime) {
   animation: obmc-stream-pulse 1.6s ease-in-out infinite alternate;
     }
   }
-  /* ---------- ⑦ 根容器清底（防御，鲸吟同款家族化 ADR-0016）+ 滚动条同系 ---------- */
+  /* ---------- ⑦ 根容器清底（防御，鲸吟同款家族化 ADR-0016；滚动条同系
+   * token 已随常量族迁声明表） ---------- */
   ${rootClear("body[data-dsh-openbmc-skin]")}
-  body[data-dsh-openbmc-skin] {
-    --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-    --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  }
   /* 注意：不要用类名选择器定位侧栏元素 —— 插件样式经 CSS modules 哈希，
    * 类名不可预测；一律通过 token 或 data-* 属性作用。 */
 
@@ -1726,7 +1657,40 @@ export function createOpenBmcHarness(jsxRuntime) {
     favicon: { href: FAVICON_DATA_URL, mime: FAVICON_MIME },
     anchor: 55,
     riding: RIDING,
-    constantTokens: null,
+    // 常量族（ADR-0016 C1：原 CSS 模板手写行逐字迁入，明暗同键；等式钉在
+    // tests/translucency-contract.test.mjs「openbmc C1」）。品牌色取自 logo
+    // 渐变（蓝 #00b0da→#008abf、绿 #a5d440→#8cce3f）：亮用深一档蓝保证白底
+    // 对比度，暗提亮为青；交互 hover-accent 为绿点缀；暗气泡=深冰蓝海军
+    // （与画面同色相，拒绝纯黑）；滚动条同系引用壳令牌。
+    constantTokens: {
+      "--dsw-alias-brand-primary": { light: "#0083b0", dark: "#3ec1e8" },
+      "--dsw-alias-brand-primary-invert": { light: "#ffffff", dark: "#06222e" },
+      "--dsw-alias-brand-text": { light: "#007197", dark: "#5ec8e8" },
+      "--dsw-alias-bg-overlay": { light: "rgba(250, 252, 253, 0.82)", dark: "rgba(10, 22, 32, 0.88)" },
+      "--dsw-specific-sidebar-nav-item-hover": { light: "rgba(231, 241, 248, 0.90)", dark: "rgba(18, 41, 58, 0.90)" },
+      "--dsw-specific-sidebar-nav-item-active": { light: "rgba(220, 235, 245, 0.90)", dark: "rgba(20, 47, 68, 0.90)" },
+      "--dsw-specific-sidebar-nav-item-active-accent": { light: "#9cc8e0", dark: "#29526f" },
+      "--dsw-specific-selector": { light: "rgba(227, 239, 247, 0.85)", dark: "rgba(16, 40, 64, 0.85)" },
+      "--dsw-specific-tip": { light: "rgba(240, 246, 250, 0.90)", dark: "rgba(12, 30, 44, 0.92)" },
+      "--dsw-alias-label-primary": { light: "#16262e", dark: "#dde9ee" },
+      "--dsw-alias-label-secondary": { light: "#3f5a66", dark: "#9fb4bd" },
+      "--dsw-alias-label-dimmed": { light: "#6b838e", dark: "#69818c" },
+      "--dsw-alias-interactive-bg-hover": { light: "rgba(0, 138, 191, 0.08)", dark: "rgba(62, 193, 232, 0.10)" },
+      "--dsw-alias-interactive-bg-active": { light: "rgba(0, 138, 191, 0.14)", dark: "rgba(62, 193, 232, 0.16)" },
+      "--dsw-alias-interactive-bg-hover-accent": { light: "rgba(140, 206, 63, 0.14)", dark: "rgba(165, 212, 64, 0.16)" },
+      "--dsw-specific-bubble": { light: "rgba(0, 138, 191, 0.10)", dark: "rgba(20, 41, 60, 0.90)" },
+      "--dsw-specific-bubble-highlight": { light: "rgba(0, 138, 191, 0.18)", dark: "rgba(29, 61, 85, 0.90)" },
+      "--dsw-font-family": {
+        light: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif',
+        dark: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif',
+      },
+      "--ds-font-family-code": {
+        light: '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace',
+        dark: '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace',
+      },
+      "--dsh-scrollbar-thumb": { light: "var(--dsw-alias-scrollbar-bg-l2)", dark: "var(--dsw-alias-scrollbar-bg-l2)" },
+      "--dsh-scrollbar-thumb-hover": { light: "var(--dsw-alias-scrollbar-hover-l2)", dark: "var(--dsw-alias-scrollbar-hover-l2)" },
+    },
     scrim: {
       kind: "baked-gradient",
       stops: {
