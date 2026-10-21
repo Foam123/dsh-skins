@@ -107,7 +107,8 @@ ${SCOPE}[data-ds-dark-theme] {
 ```sh
 pnpm install
 pnpm run test      # 构建 + 冒烟测试 + 全部单测（smoke 与 built-host 测的是 lib/ 产物，故每次先重建）
-pnpm run check     # 完整门禁：构建 + 语法检查 + 测试 + README 配对 + bundle/上游钩子守卫
+pnpm run check     # 完整门禁：构建 + 语法检查 + tests/ ESLint + 测试 + README 配对 + bundle/上游钩子守卫
+pnpm run lint:tests # tests/ 单规则 ESLint（no-dupe-keys——对象字面量重复键直接红；源自 2026-10-21 执行期假件重复键缺陷，已并入 check）
 pnpm run watch     # 监听 src/，分别重建 lib/client.js 与 lib/index.js
 ```
 
