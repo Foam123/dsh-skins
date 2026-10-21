@@ -76,56 +76,25 @@ export function createUefiHarness({ jsx }) {
   const SPEC = { anchor: 55, riding: RIDING }; // ridingDecl 只读这两项，与声明表共享引用
 
   const css = `
+/* 配色常量族已迁声明表 constantTokens（ADR-0016 C1）；此处只留随动族
+ * ridingDecl 插值行（ADR-0004 锚点字节不变式的载体）。 */
 body[data-dsh-uefi-harness] {
-  --dsw-alias-brand-primary: #6553d8;
-  --dsw-alias-brand-primary-invert: #ffffff;
-  --dsw-alias-brand-text: #5846c2;
   ${ridingDecl(SPEC, "--dsw-alias-bg-base", "light")}
-  --dsw-alias-bg-overlay: rgba(252, 251, 255, 0.82);
   ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "light")}
   ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "light")}
   ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "light")}
   ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "light")}
   ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "light")}
-  --dsw-specific-sidebar-nav-item-hover: rgba(101, 83, 216, 0.09);
-  --dsw-specific-sidebar-nav-item-active: rgba(101, 83, 216, 0.15);
-  --dsw-specific-sidebar-nav-item-active-accent: #8b7cff;
   ${ridingDecl(SPEC, "--dsw-specific-input-major", "light")}
-  --dsw-specific-selector: rgba(232, 228, 255, 0.78);
-  --dsw-specific-tip: rgba(244, 242, 255, 0.88);
-  --dsw-alias-label-primary: #211c36;
-  --dsw-alias-label-secondary: #554d74;
-  --dsw-alias-label-dimmed: #81799e;
-  --dsw-alias-interactive-bg-hover: rgba(101, 83, 216, 0.09);
-  --dsw-alias-interactive-bg-active: rgba(101, 83, 216, 0.15);
-  --dsw-specific-bubble: rgba(101, 83, 216, 0.11);
-  --dsw-specific-bubble-highlight: rgba(101, 83, 216, 0.18);
-  --dsw-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
 }
 body[data-dsh-uefi-harness][data-ds-dark-theme] {
-  --dsw-alias-brand-primary: #a99cff;
-  --dsw-alias-brand-primary-invert: #1b143a;
-  --dsw-alias-brand-text: #b7acff;
   ${ridingDecl(SPEC, "--dsw-alias-bg-base", "dark")}
-  --dsw-alias-bg-overlay: rgba(27, 21, 54, 0.88);
   ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "dark")}
   ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "dark")}
   ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "dark")}
   ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "dark")}
   ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "dark")}
-  --dsw-specific-sidebar-nav-item-hover: rgba(169, 156, 255, 0.10);
-  --dsw-specific-sidebar-nav-item-active: rgba(169, 156, 255, 0.17);
-  --dsw-specific-sidebar-nav-item-active-accent: #6657a8;
   ${ridingDecl(SPEC, "--dsw-specific-input-major", "dark")}
-  --dsw-specific-selector: rgba(51, 40, 96, 0.78);
-  --dsw-specific-tip: rgba(34, 27, 65, 0.90);
-  --dsw-alias-label-primary: #f0edff;
-  --dsw-alias-label-secondary: #b9b1d6;
-  --dsw-alias-label-dimmed: #827a9f;
-  --dsw-alias-interactive-bg-hover: rgba(169, 156, 255, 0.11);
-  --dsw-alias-interactive-bg-active: rgba(169, 156, 255, 0.18);
-  --dsw-specific-bubble: rgba(60, 48, 108, 0.90);
-  --dsw-specific-bubble-highlight: rgba(78, 63, 138, 0.92);
 }
 ${rootClear("body[data-dsh-uefi-harness]")}
 body[data-dsh-uefi-harness] [data-streaming] {
@@ -1097,7 +1066,30 @@ ${decorationCss("body[data-dsh-uefi-harness]", { light: "101, 83, 216", dark: "1
     favicon: { href: favicon, mime: "image/svg+xml" },
     anchor: 55,
     riding: RIDING,
-    constantTokens: null,
+    // 常量族（ADR-0016 C1：原 css 模板手写行逐字迁入；等式钉在
+    // tests/translucency-contract.test.mjs「uefi C1」）。
+    constantTokens: {
+      "--dsw-alias-brand-primary": { light: "#6553d8", dark: "#a99cff" },
+      "--dsw-alias-brand-primary-invert": { light: "#ffffff", dark: "#1b143a" },
+      "--dsw-alias-brand-text": { light: "#5846c2", dark: "#b7acff" },
+      "--dsw-alias-bg-overlay": { light: "rgba(252, 251, 255, 0.82)", dark: "rgba(27, 21, 54, 0.88)" },
+      "--dsw-specific-sidebar-nav-item-hover": { light: "rgba(101, 83, 216, 0.09)", dark: "rgba(169, 156, 255, 0.10)" },
+      "--dsw-specific-sidebar-nav-item-active": { light: "rgba(101, 83, 216, 0.15)", dark: "rgba(169, 156, 255, 0.17)" },
+      "--dsw-specific-sidebar-nav-item-active-accent": { light: "#8b7cff", dark: "#6657a8" },
+      "--dsw-specific-selector": { light: "rgba(232, 228, 255, 0.78)", dark: "rgba(51, 40, 96, 0.78)" },
+      "--dsw-specific-tip": { light: "rgba(244, 242, 255, 0.88)", dark: "rgba(34, 27, 65, 0.90)" },
+      "--dsw-alias-label-primary": { light: "#211c36", dark: "#f0edff" },
+      "--dsw-alias-label-secondary": { light: "#554d74", dark: "#b9b1d6" },
+      "--dsw-alias-label-dimmed": { light: "#81799e", dark: "#827a9f" },
+      "--dsw-alias-interactive-bg-hover": { light: "rgba(101, 83, 216, 0.09)", dark: "rgba(169, 156, 255, 0.11)" },
+      "--dsw-alias-interactive-bg-active": { light: "rgba(101, 83, 216, 0.15)", dark: "rgba(169, 156, 255, 0.18)" },
+      "--dsw-specific-bubble": { light: "rgba(101, 83, 216, 0.11)", dark: "rgba(60, 48, 108, 0.90)" },
+      "--dsw-specific-bubble-highlight": { light: "rgba(101, 83, 216, 0.18)", dark: "rgba(78, 63, 138, 0.92)" },
+      "--dsw-font-family": {
+        light: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif',
+        dark: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif',
+      },
+    },
     scrim: {
       kind: "baked-gradient",
       stops: {

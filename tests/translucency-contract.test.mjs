@@ -342,3 +342,34 @@ test("openbmc C1: constant tokens live in the declaration table, values verbatim
     }
   }
 });
+
+// ---- ADR-0016 C1 (uefi): removed-lines golden -------------------------------
+const UEFI_FONT_UI = '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif';
+const UEFI_CONSTANT_TOKENS = {
+  "--dsw-alias-brand-primary": { light: "#6553d8", dark: "#a99cff" },
+  "--dsw-alias-brand-primary-invert": { light: "#ffffff", dark: "#1b143a" },
+  "--dsw-alias-brand-text": { light: "#5846c2", dark: "#b7acff" },
+  "--dsw-alias-bg-overlay": { light: "rgba(252, 251, 255, 0.82)", dark: "rgba(27, 21, 54, 0.88)" },
+  "--dsw-specific-sidebar-nav-item-hover": { light: "rgba(101, 83, 216, 0.09)", dark: "rgba(169, 156, 255, 0.10)" },
+  "--dsw-specific-sidebar-nav-item-active": { light: "rgba(101, 83, 216, 0.15)", dark: "rgba(169, 156, 255, 0.17)" },
+  "--dsw-specific-sidebar-nav-item-active-accent": { light: "#8b7cff", dark: "#6657a8" },
+  "--dsw-specific-selector": { light: "rgba(232, 228, 255, 0.78)", dark: "rgba(51, 40, 96, 0.78)" },
+  "--dsw-specific-tip": { light: "rgba(244, 242, 255, 0.88)", dark: "rgba(34, 27, 65, 0.90)" },
+  "--dsw-alias-label-primary": { light: "#211c36", dark: "#f0edff" },
+  "--dsw-alias-label-secondary": { light: "#554d74", dark: "#b9b1d6" },
+  "--dsw-alias-label-dimmed": { light: "#81799e", dark: "#827a9f" },
+  "--dsw-alias-interactive-bg-hover": { light: "rgba(101, 83, 216, 0.09)", dark: "rgba(169, 156, 255, 0.11)" },
+  "--dsw-alias-interactive-bg-active": { light: "rgba(101, 83, 216, 0.15)", dark: "rgba(169, 156, 255, 0.18)" },
+  "--dsw-specific-bubble": { light: "rgba(101, 83, 216, 0.11)", dark: "rgba(60, 48, 108, 0.90)" },
+  "--dsw-specific-bubble-highlight": { light: "rgba(101, 83, 216, 0.18)", dark: "rgba(78, 63, 138, 0.92)" },
+  "--dsw-font-family": { light: UEFI_FONT_UI, dark: UEFI_FONT_UI },
+};
+
+test("uefi C1: constant tokens live in the declaration table, values verbatim (ADR-0016)", () => {
+  const fx = projectorFor("uefi")(GOLD.uefi.anchor);
+  for (const [token, modes] of Object.entries(UEFI_CONSTANT_TOKENS)) {
+    for (const mode of ["light", "dark"]) {
+      assert.equal(fx.tokenOverrides[token]?.[mode], modes[mode], `uefi ${token} ${mode} @anchor`);
+    }
+  }
+});
