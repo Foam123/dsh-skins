@@ -40,7 +40,7 @@ date: 2026-10-19
 
 ## Amendments
 
-- 无（首版）。
+- **2026-10-21**：附录 Q3 的递延项（守卫↔src 选择器的机械链接）由 ADR-0016 裁定收账——气泡钩子哈希单源化为 `src/client/skins/decoration.js` 的 `BUBBLE_HOOKS`，守卫与本守卫的 lib 钉测试改为 import 单源消费（实施随其计划）。
 
 ## 附录：grill 共识（Q1–Q13，2026-10-19 会话存档）
 
