@@ -7,7 +7,7 @@
  */
 import { frostFamilyCss } from "../frost-family.js";
 import { createProjection, ridingDecl } from "../translucency.js";
-import { decorationCss } from "../decoration.js";
+import { decorationCss, rootClear } from "../decoration.js";
 
 // Official UEFI Forum logo — the red cube with white "uefi" letters, embedded
 // as two vector paths traced from uefi.org's published uefi_logo_red.gif
@@ -127,7 +127,7 @@ body[data-dsh-uefi-harness][data-ds-dark-theme] {
   --dsw-specific-bubble: rgba(60, 48, 108, 0.90);
   --dsw-specific-bubble-highlight: rgba(78, 63, 138, 0.92);
 }
-body[data-dsh-uefi-harness] [id="root"] { background: transparent; }
+${rootClear("body[data-dsh-uefi-harness]")}
 body[data-dsh-uefi-harness] [data-streaming] {
   border-radius: 4px;
   box-shadow: inset 3px 0 0 var(--dsw-alias-brand-primary);

@@ -45,3 +45,32 @@ export function decorationCss(scope, palette) {
     `${scope}[data-ds-dark-theme] ${goal}{border-color:rgba(${palette.dark}, 0.38);box-shadow:0 1px 6px rgba(${palette.dark}, 0.10)}`,
   ].join("\n");
 }
+
+/**
+ * 防御性根容器清底：上游 #root 现行无背景（0.2.1-rc.2 实测仅 height/margin），
+ * 本规则今日 no-op；上游若再给 root 上背景，持有此规则的皮肤同时免疫
+ * （鲸吟时代防御遗产的家族化，ADR-0016 Q12 裁定三皮统一持有）。
+ */
+export function rootClear(scope) {
+  return `${scope} [id="root"]{background:0 0}`;
+}
+
+/**
+ * 反色片徽章（official HARNESS ▐HARNESS▌ 同构、tgcf badge 同源模式）：
+ * 壳里不存在 --dsw-alias-label-primary-inverted 令牌（那是官方 BrandWordmark
+ * 的内部实现细节），内联 var() 取不到值会让字色整体失效——须皮肤自带明暗
+ * 两套显式颜色。圆角 4px：官方 SVG rect 虽是 rx=2，但实测对比需在 14px
+ * 高度上取 4px 才有官方观感的弧度（tgcf 徽章同值，主人实测裁决）。
+ *
+ * colors = { light: {bg,fg}, dark: {bg,fg} }；metrics = { lineHeight,
+ * fontWeight } 参数化保留各皮现值（Q7：openbmc 14px/650、meirenzhi
+ * 16px/600，不统一——统一属将来目测项）；其余排版为机制常量。输出两条
+ * 完整规则：亮规则全量声明、暗规则仅 background/color 覆写（镜像现行
+ * 两皮结构）。uefi 描边风徽章是单皮变体、不入族（ADR-0016 Decision 6）。
+ */
+export function badgeCss(scope, className, colors, metrics) {
+  return [
+    `${scope} ${className}{display:inline-flex;align-items:center;background:${colors.light.bg};border-radius:4px;padding:0 5px;font-size:10px;line-height:${metrics.lineHeight};font-weight:${metrics.fontWeight};letter-spacing:.08em;color:${colors.light.fg}}`,
+    `${scope}[data-ds-dark-theme] ${className}{background:${colors.dark.bg};color:${colors.dark.fg}}`,
+  ].join("\n");
+}

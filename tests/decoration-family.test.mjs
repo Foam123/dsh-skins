@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BUBBLE_HOOKS, decorationCss } from "../src/client/skins/decoration.js";
+import { BUBBLE_HOOKS, decorationCss, badgeCss, rootClear } from "../src/client/skins/decoration.js";
 
 const MRZ_SCOPE = "body[data-dsh-meirenzhi-skin]";
 const MRZ_PALETTE = { light: "184, 67, 63", dark: "229, 138, 128" };
@@ -58,4 +58,44 @@ test("BUBBLE_HOOKS: the single source of the pinned hashes (guard + skins consum
   assert.equal(BUBBLE_HOOKS.goal.exact, "oRe1gG_bubble");
   assert.equal(BUBBLE_HOOKS.goal.container, "_stack");
   assert.equal(BUBBLE_HOOKS.bubbleLocal, "_bubble");
+});
+
+test("badgeCss: meirenzhi output reproduces the shipped golden bytes (canonical)", () => {
+  const css = badgeCss(MRZ_SCOPE, ".dsh-mrz-badge",
+    { light: { bg: "#12121A", fg: "#FAF9F6" }, dark: { bg: "#FAF9F6", fg: "#12121A" } },
+    { lineHeight: "16px", fontWeight: 600 });
+  assert.ok(css.includes(
+    `${MRZ_SCOPE} .dsh-mrz-badge{display:inline-flex;align-items:center;background:#12121A;border-radius:4px;padding:0 5px;font-size:10px;line-height:16px;font-weight:600;letter-spacing:.08em;color:#FAF9F6}`,
+  ), "badge light golden");
+  assert.ok(css.includes(
+    `${MRZ_SCOPE}[data-ds-dark-theme] .dsh-mrz-badge{background:#FAF9F6;color:#12121A}`,
+  ), "badge dark golden (pinned by tests/meirenzhi-skin.test.mjs:49 too)");
+});
+
+test("badgeCss: openbmc output carries the same declaration pairs as the retired ④b block (canon equivalence)", () => {
+  const css = badgeCss("body[data-dsh-openbmc-skin]", ".dsh-openbmc-badge",
+    { light: { bg: "#14202B", fg: "#F7FAFC" }, dark: { bg: "#F7FAFC", fg: "#14202B" } },
+    { lineHeight: "14px", fontWeight: 650 });
+  const pairs = (ruleBody) => ruleBody.split(/(?<=;)/).map((d) => d.trim().replace(/;$/, "")).filter(Boolean).sort();
+  const light = css.split("{")[1]?.split("}")[0] ?? "";
+  const dark = css.split("{")[2]?.split("}")[0] ?? "";
+  assert.deepEqual(pairs(light), [
+    "align-items:center", "background:#14202B", "border-radius:4px", "color:#F7FAFC",
+    "display:inline-flex", "font-size:10px", "font-weight:650", "letter-spacing:.08em",
+    "line-height:14px", "padding:0 5px",
+  ], "light rule keeps every ④b declaration pair");
+  assert.deepEqual(pairs(dark), ["background:#F7FAFC", "color:#14202B"], "dark rule keeps the inversion pair");
+});
+
+test("rootClear: one defensive rule per scope, identical modulo scope", () => {
+  const expected = `${MRZ_SCOPE} [id="root"]{background:0 0}`;
+  assert.equal(rootClear(MRZ_SCOPE), expected);
+  assert.equal(
+    rootClear("body[data-dsh-openbmc-skin]"),
+    expected.split(MRZ_SCOPE).join("body[data-dsh-openbmc-skin]"),
+  );
+  assert.equal(
+    rootClear("body[data-dsh-uefi-harness]"),
+    expected.split(MRZ_SCOPE).join("body[data-dsh-uefi-harness]"),
+  );
 });

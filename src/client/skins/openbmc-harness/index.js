@@ -1,7 +1,7 @@
 /** Independent OpenBMC Studio skin (id: openbmc). */
 import { frostFamilyCss } from "../frost-family.js";
 import { createProjection, ridingDecl } from "../translucency.js";
-import { decorationCss } from "../decoration.js";
+import { decorationCss, badgeCss, rootClear } from "../decoration.js";
 
 export function createOpenBmcHarness(jsxRuntime) {
   const { jsx } = jsxRuntime;
@@ -247,21 +247,12 @@ export function createOpenBmcHarness(jsxRuntime) {
   Menlo, Consolas, monospace;
   }
 
-  /* ---------- ④b 品牌徽章：官方 ▐HARNESS▌ 同构反色片（HTML/CSS 绘制） ----------
-   * 壳里不存在 --dsw-alias-label-primary-inverted 令牌（那是官方 BrandWordmark
-   * 的内部实现细节），内联 var() 取不到值会让字色整体失效——改为皮肤自带
-   * 规则 + 明暗两套显式颜色（与 tgcf 的 NO TABOOS 徽章同一模式）。
-   * 圆角 4px：官方 SVG rect 虽是 rx=2，但实测对比需在 14px 高度上取 4px
-   * 才有官方观感的弧度（tgcf 徽章同值）。 */
-  body[data-dsh-openbmc-skin] .dsh-openbmc-badge {
-    display: inline-flex; align-items: center;
-    background: #14202B; color: #F7FAFC;
-    border-radius: 4px; padding: 0 5px;
-    font-size: 10px; line-height: 14px; font-weight: 650; letter-spacing: .08em;
-  }
-  body[data-dsh-openbmc-skin][data-ds-dark-theme] .dsh-openbmc-badge {
-    background: #F7FAFC; color: #14202B;
-  }
+  /* ---------- ④b 品牌徽章：官方 ▐HARNESS▌ 同构反色片 ----------
+   * 规则唯一来源在 ../decoration.js badgeCss（ADR-0016；裁决史见其头注），
+   * 本皮自持色值与 metrics（14px/650，Q7 参数化保留现值）。 */
+  ${badgeCss("body[data-dsh-openbmc-skin]", ".dsh-openbmc-badge",
+    { light: { bg: "#14202B", fg: "#F7FAFC" }, dark: { bg: "#F7FAFC", fg: "#14202B" } },
+    { lineHeight: "14px", fontWeight: 650 })}
 
   /* ---------- ⑥ 会话气泡装饰：品牌描边 + 流式呼吸光条 ---------- */
   /* 用户气泡填充换品牌蓝 tint（token 层，随版本稳定） */
@@ -291,8 +282,8 @@ export function createOpenBmcHarness(jsxRuntime) {
   animation: obmc-stream-pulse 1.6s ease-in-out infinite alternate;
     }
   }
-  /* ---------- ⑦ 根容器清底 + 滚动条同系（防御 + 细节，鲸吟同款） ---------- */
-  body[data-dsh-openbmc-skin] [id="root"] { background: 0 0; }
+  /* ---------- ⑦ 根容器清底（防御，鲸吟同款家族化 ADR-0016）+ 滚动条同系 ---------- */
+  ${rootClear("body[data-dsh-openbmc-skin]")}
   body[data-dsh-openbmc-skin] {
     --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
     --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
