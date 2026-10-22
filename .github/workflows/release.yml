@@ -68,7 +68,7 @@ jobs:
           # pnpm 10 publish delegates to `npm publish` under the hood, so the
           # OIDC exchange happens in npm. Provenance is automatic (public repo
           # + public package). --no-git-checks: the tag checkout is detached.
-          npm install -g npm@11
+          npm install -g npm@11 && echo "publish toolchain: npm $(npm -v) / node $(node -v)"
           set +e
           OUT=$(pnpm publish --no-git-checks 2>&1); rc=$?
           set -e
