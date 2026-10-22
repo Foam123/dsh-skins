@@ -1,6 +1,6 @@
 /** Independent OpenBMC Studio skin (id: openbmc). */
 import { frostFamilyCss } from "../frost-family.js";
-import { createProjection, ridingDecl } from "../translucency.js";
+import { createProjection } from "../translucency.js";
 import { decorationCss, badgeCss, rootClear, streamingCss } from "../decoration.js";
 
 export function createOpenBmcHarness(jsxRuntime) {
@@ -148,8 +148,8 @@ export function createOpenBmcHarness(jsxRuntime) {
     menu: { light: "242, 247, 251", dark: "14, 33, 48" },
   };
 
-  // 随动族（ADR-0013）：值即出厂锚点 55 处的烘焙读数，逐字对应下方 CSS 块
-  // 的插值行；重基线与模糊曲线机制住 ../translucency.js 投影核。
+  // 随动族（ADR-0013）：值即出厂锚点 55 处的烘焙读数，全走 tokenOverrides
+  // （ADR-0017：模板不持 P 相关值）；重基线与模糊曲线机制住 ../translucency.js 投影核。
   const RIDING = {
     "--dsw-alias-bg-base": { light: ["247, 250, 252", 55], dark: ["12, 26, 38", 55] },
     "--dsw-alias-bg-module-platform": { light: ["240, 246, 250", 55], dark: ["22, 48, 67", 60] },
@@ -160,32 +160,10 @@ export function createOpenBmcHarness(jsxRuntime) {
     "--dsw-specific-input-major": { light: ["255, 255, 255", 60], dark: ["18, 42, 60", 65] },
     "--dsw-specific-login-input": { light: ["255, 255, 255", 60], dark: ["18, 42, 60", 65] },
   };
-  const SPEC = { anchor: 55, riding: RIDING }; // ridingDecl 只读这两项，与声明表共享引用
 
   const CSS = `
-  /* ---------- ③ 配色：常量族已迁声明表 constantTokens（ADR-0016 C1），
-     此处只留随动族 ridingDecl 插值行（ADR-0004 锚点字节不变式的载体） ---------- */
-  body[data-dsh-openbmc-skin] {
-    ${ridingDecl(SPEC, "--dsw-alias-bg-base", "light")}
-    ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "light")}
-    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "light")}
-    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "light")}
-    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "light")}
-    ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "light")}
-    ${ridingDecl(SPEC, "--dsw-specific-input-major", "light")}
-    ${ridingDecl(SPEC, "--dsw-specific-login-input", "light")}
-  }
-
-  body[data-dsh-openbmc-skin][data-ds-dark-theme] {
-    ${ridingDecl(SPEC, "--dsw-alias-bg-base", "dark")}
-    ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "dark")}
-    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "dark")}
-    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "dark")}
-    ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "dark")}
-    ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "dark")}
-    ${ridingDecl(SPEC, "--dsw-specific-input-major", "dark")}
-    ${ridingDecl(SPEC, "--dsw-specific-login-input", "dark")}
-  }
+  /* ---------- ③ 配色：token（常量族 + 随动族）一律走声明表 → constantTokens /
+     riding → tokenOverrides（ADR-0016 C1 + ADR-0017），CSS 模板只持品牌装饰段 ---------- */
 
   /* ---------- ④b 品牌徽章：官方 ▐HARNESS▌ 同构反色片 ----------
    * 规则唯一来源在 ../decoration.js badgeCss（ADR-0016；裁决史见其头注），

@@ -6,7 +6,7 @@
  * design remains a placeholder until the final design lands.
  */
 import { frostFamilyCss } from "../frost-family.js";
-import { createProjection, ridingDecl } from "../translucency.js";
+import { createProjection } from "../translucency.js";
 import { decorationCss, rootClear, streamingCss } from "../decoration.js";
 
 // Official UEFI Forum logo — the red cube with white "uefi" letters, embedded
@@ -62,8 +62,8 @@ export function createUefiHarness({ jsx }) {
     menu: { light: "248, 247, 255", dark: "28, 22, 55" },
   };
 
-  // 随动族（ADR-0013）：值即出厂锚点 55 处的烘焙读数，逐字对应下方 css 块
-  // 的插值行；重基线与模糊曲线机制住 ../translucency.js 投影核。
+  // 随动族（ADR-0013）：值即出厂锚点 55 处的烘焙读数，全走 tokenOverrides
+  // （ADR-0017：模板不持 P 相关值）；重基线与模糊曲线机制住 ../translucency.js 投影核。
   const RIDING = {
     "--dsw-alias-bg-base": { light: ["248, 247, 255", 55], dark: ["23, 18, 45", 55] },
     "--dsw-alias-bg-module-platform": { light: ["241, 238, 255", 55], dark: ["39, 31, 73", 60] },
@@ -73,29 +73,10 @@ export function createUefiHarness({ jsx }) {
     "--dsw-specific-sidebar-fill": { light: ["238, 235, 255", 60], dark: ["25, 20, 48", 72] },
     "--dsw-specific-input-major": { light: ["255, 255, 255", 62], dark: ["42, 34, 78", 55] },
   };
-  const SPEC = { anchor: 55, riding: RIDING }; // ridingDecl 只读这两项，与声明表共享引用
 
   const css = `
-/* 配色常量族已迁声明表 constantTokens（ADR-0016 C1）；此处只留随动族
- * ridingDecl 插值行（ADR-0004 锚点字节不变式的载体）。 */
-body[data-dsh-uefi-harness] {
-  ${ridingDecl(SPEC, "--dsw-alias-bg-base", "light")}
-  ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "light")}
-  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "light")}
-  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "light")}
-  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "light")}
-  ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "light")}
-  ${ridingDecl(SPEC, "--dsw-specific-input-major", "light")}
-}
-body[data-dsh-uefi-harness][data-ds-dark-theme] {
-  ${ridingDecl(SPEC, "--dsw-alias-bg-base", "dark")}
-  ${ridingDecl(SPEC, "--dsw-alias-bg-module-platform", "dark")}
-  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-1", "dark")}
-  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-2", "dark")}
-  ${ridingDecl(SPEC, "--dsw-alias-bg-layer-3", "dark")}
-  ${ridingDecl(SPEC, "--dsw-specific-sidebar-fill", "dark")}
-  ${ridingDecl(SPEC, "--dsw-specific-input-major", "dark")}
-}
+/* 配色 token（常量族 + 随动族）一律走声明表 → constantTokens / riding →
+ * tokenOverrides（ADR-0016 C1 + ADR-0017），CSS 模板只持品牌装饰段。 */
 ${rootClear("body[data-dsh-uefi-harness]")}
 /* 流式呼吸光条（ADR-0016 视觉窗口：静态版升级呼吸，衰减色 = 暗色品牌主色
  * @0.20，Q16）：规则唯一来源在 ../decoration.js streamingCss。 */

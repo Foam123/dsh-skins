@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createProjection, ridingDecl, glassRule } from "../src/client/skins/translucency.js";
+import { createProjection, glassRule } from "../src/client/skins/translucency.js";
 import { normalizeEffects } from "../src/client/personalization/projector.js";
 
 const USER_REF = "u_0123456789abcdef0123456789abcdef";
@@ -188,15 +188,6 @@ test("draft passes normalizeEffects; missing slogan normalizes to null slogans",
   const noSlogan = normalizeEffects(legacy({ panelOpacity: 20 }, null));
   assert.notEqual(noSlogan, null);
   assert.equal(noSlogan.slogans, null);
-});
-
-test("ridingDecl: anchor-value declaration line, byte format with trailing semicolon", () => {
-  assert.equal(ridingDecl(legacyTable, "--syn-low", "light"), "--syn-low: rgba(1, 2, 3, 0.10);");
-  assert.equal(ridingDecl(legacyTable, "--syn-low", "dark"), "--syn-low: rgba(4, 5, 6, 0.70);");
-  // only .riding/.anchor are read, so a partial spec shared with the CSS
-  // template must produce identical bytes to the full table
-  const partial = { anchor: legacyTable.anchor, riding: legacyTable.riding };
-  assert.equal(ridingDecl(partial, "--syn-high", "dark"), ridingDecl(legacyTable, "--syn-high", "dark"));
 });
 
 test("glassRule: camelCase body attribute → data-kebab scope, single line", () => {

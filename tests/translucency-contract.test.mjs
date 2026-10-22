@@ -153,19 +153,6 @@ for (const [skinId, spec] of Object.entries(GOLD)) {
     const fx = at(spec.anchor);
     assertRiding(fx, spec.anchor, spec);
     assertBlurAndGlass(fx, spec.anchor, spec);
-    if (legacy) {
-      // CSS↔effects cross-check (twins only): every riding declaration line is
-      // present in the static CSS at its baked value.
-      for (const [token, modes] of Object.entries(spec.riding)) {
-        for (const mode of ["light", "dark"]) {
-          const [rgb, baked] = modes[mode];
-          assert.ok(
-            fx.staticCss.includes(`${token}: rgba(${rgb}, ${alpha2(spec.anchor, baked, spec.anchor)});`),
-            `${skinId} CSS↔effects cross-check ${token} ${mode}`,
-          );
-        }
-      }
-    }
   });
 
   test(`${skinId}: desktop factory P=66 — riding = anchor+11, blur/glass/desktopBlur gold`, () => {
@@ -277,32 +264,26 @@ for (const [skinId, spec] of Object.entries(GOLD)) {
   });
 }
 
-test("openbmc source: riding declarations single-sourced (16 interpolations, zero hand-written)", () => {
-  const src = readFileSync(SRC.openbmc, "utf8");
-  assert.equal(countMatches(src, "\\$\\{ridingDecl\\("), 16, "exactly 16 ridingDecl interpolations");
-  for (const token of Object.keys(GOLD.openbmc.riding)) {
-    assert.equal(
-      countMatches(src, escapeRe(`${token}: rgba(`)),
-      0,
-      `${token} must not appear as a hand-written rgba declaration (14 non-riding neighbours are exempt by full-name match)`,
-    );
-  }
-});
-
-test("uefi source: riding declarations single-sourced (14 interpolations, zero hand-written)", () => {
-  const src = readFileSync(SRC.uefi, "utf8");
-  assert.equal(countMatches(src, "\\$\\{ridingDecl\\("), 14, "exactly 14 ridingDecl interpolations");
-  for (const token of Object.keys(GOLD.uefi.riding)) {
-    assert.equal(
-      countMatches(src, escapeRe(`${token}: rgba(`)),
-      0,
-      `${token} must not appear as a hand-written rgba declaration (12 non-riding neighbours are exempt by full-name match)`,
-    );
+// ---- ADR-0017: reverse pin — riding tokens are table-channel ONLY ----------------
+// The static riding block (ridingDecl interpolations, the ADR-0004 byte-equality
+// carrier) is retired: tokenOverrides → ThemePresenter inline style is the
+// single channel (meirenzhi-proven in production). Successor of the retired
+// count pins — from "constructed equality" to "constructed absence": no skin
+// may ever bake a P-dependent token declaration back into staticCss.
+test("ADR-0017 reverse pin: no riding token declarations in any skin's staticCss", () => {
+  for (const [skinId, spec] of Object.entries(GOLD)) {
+    const fx = projectorFor(skinId)(spec.anchor);
+    for (const token of Object.keys(spec.riding)) {
+      assert.ok(
+        !fx.staticCss.includes(`${token}:`),
+        `${skinId} staticCss must not declare riding token ${token} (ADR-0017: table channel only)`,
+      );
+    }
   }
 });
 
 // ---- ADR-0016 C1: constant tokens live in the declaration table -----------------
-// The golden below is the removed-lines list: every non-ridingDecl declaration
+// The golden below is the removed-lines list: every non-riding declaration
 // that used to live hand-written in the openbmc CSS template (③ light/dark
 // constant blocks, ④ font stack, ⑥ bubble light fill, ⑦ scrollbar). At the
 // factory anchor the projection's tokenOverrides must carry each value
