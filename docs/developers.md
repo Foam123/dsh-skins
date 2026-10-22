@@ -30,7 +30,7 @@
 
 ```js
 import { frostFamilyCss } from "../frost-family.js";
-import { createProjection, ridingDecl } from "../translucency.js";
+import { createProjection } from "../translucency.js";
 
 const SCOPE = "body[data-dsh-my-skin]"; // = bodyAttribute 的 dataset 形式：dshMySkin → data-dsh-my-skin
 
@@ -38,20 +38,15 @@ export function createMySkin({ jsx }) {
   function Mark({ size = 24 }) { /* 返回图标 */ }
   function Name() { /* 返回品牌名 */ }
 
-  // 随动族（ADR-0013）：值 = 出厂锚点处的烘焙读数，CSS 块内同名声明一律经
-  // ridingDecl 插值生成（模板持排版、表持值——文件内不再有第二份字面量）。
+  // 随动族（ADR-0013/0017）：值 = 出厂锚点处的烘焙读数，全走 tokenOverrides
+  // ——模板不持任何 P 相关值，静态 riding 声明已随 ADR-0017 退役。
   const RIDING = { "--dsw-alias-bg-base": { light: ["R, G, B", 35], dark: ["R, G, B", 35] } };
-  const SPEC = { anchor: 35, riding: RIDING };
 
-  const css = `${SCOPE} {
-  ${ridingDecl(SPEC, "--dsw-alias-bg-base", "light")}
-${SCOPE}[data-ds-dark-theme] {
-  ${ridingDecl(SPEC, "--dsw-alias-bg-base", "dark")}
-}`;
-  // 浮层毛玻璃家族段（菜单三件套 + 冻层全段）一行取得（ADR-0012）；
+  // CSS 模板只持品牌装饰段（ADR-0017）。浮层毛玻璃家族段（菜单三件套 +
+  // 冻层全段）一行取得（ADR-0012）；
   // TINTS = { frost: { light, dark }, menu: { light, dark } }，tint 自持。
   const TINTS = { frost: { light: "R, G, B", dark: "R, G, B" }, menu: { light: "R, G, B", dark: "R, G, B" } };
-  const fullCss = `${css}\n${frostFamilyCss(SCOPE, TINTS)}`;
+  const fullCss = frostFamilyCss(SCOPE, TINTS);
 
   // 会话装饰族（ADR-0016）：气泡描边 / 流式呼吸光条 / 反色片徽章 / 防御性
   // root 清底的规则唯一来源在 ../decoration.js，皮肤只注入 scope 与色值：
@@ -82,7 +77,7 @@ ${SCOPE}[data-ds-dark-theme] {
     wallpaper: { kind: "assets" },
     staticCss: fullCss,
   };
-  const project = createProjection(table); // 出厂锚点投影与烘焙串逐字节相等（ADR-0004 不变式，tests/translucency-contract 钉住）
+  const project = createProjection(table); // 出厂锚点投影经 tokenOverrides 施加；静态烘焙串已退役（ADR-0017）
 
   return {
     id: "my-skin",
