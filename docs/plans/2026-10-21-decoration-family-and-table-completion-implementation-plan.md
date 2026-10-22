@@ -184,7 +184,7 @@ export function rootClear(scope)
 - [ ] Step 3: `tests/decoration-family.test.mjs` 增 streamingCss 断言：家族 keyframes 名在场、decay 注入生效、`prefers-reduced-motion` 兜底行在场、三皮输出仅 scope 与 decay 异。
 - Run: `pnpm run build && node --test tests/decoration-family.test.mjs tests/meirenzhi-skin.test.mjs && node smoke-test.cjs`
 - Expected: 全绿（meirenzhi 新增流式后冻结测试即时仍绿，勿等 Task 6 兜底）；判据 `! grep -rn 'data-streaming' src/client/skins/openbmc-harness src/client/skins/uefi-harness src/client/skins/meirenzhi` 成立。
-- [ ] Step 4: 主人目测（验收口径）：静态预览截图覆盖不了流式态，须活会话目测——web 机开新会话触发流式，逐皮核对：① meirenzhi 鎏金光条与衰减观感；② uefi 呼吸节奏与衰减色 `rgba(169, 156, 255, 0.20)`；③ openbmc 流式态与改前不回归。辅助回归：`node scripts/capture-previews.mjs --gate`（静态面，写入 `.artifacts/release-gates/v<当前版本>/`，gitignored）。
+- [ ] Step 4: 主人目测（验收口径）：静态预览截图覆盖不了流式态，须活会话目测——web 机开新会话触发流式，逐皮核对：① meirenzhi 鎏金光条与衰减观感；② uefi 呼吸节奏与衰减色 `rgba(169, 156, 255, 0.20)`；③ openbmc 流式态与改前不回归。辅助回归：`node scripts/capture-previews.mjs --gate`（静态面，写入 `.artifacts/release-gates/v<当前版本>/`，gitignored）。**执行期口径修正（2026-10-22 主人裁定）**：① 活会话目测以视觉评审的离线渲染冻结帧（三皮 × p0/p0.5/p1/rm 全套，6/6 帧零像素差 + 流式三态实证）代偿接受，真机活会话目测移至发版升级后补课；② capture gate 本次豁免（避免动真机会话状态）；③ README（中英）本次不提流式光条。
 - [ ] Step 5: checkpoint：`feat(skins): 流式呼吸光条三皮统一（ADR-0016 视觉窗口）`（含 lib）。
 
 ### Task 6: 文档收编 + 全门禁收尾
