@@ -45,7 +45,7 @@ supersedes: design-1.0.0-personalization.md §9a 终态裁决（未立过 ADR）
 
 ## Amendments
 
-- 无（首版）。
+- **2026-10-22**：Decision 的「新不变量取代字节等价」（默认投影派生串与工厂烘焙串逐字节相等）随静态 riding 块退役而**收档**（ADR-0017）——其使命（投影核接管期的迁移安全）已完成，烘焙串消失后等式自然消解，投影正确性测试面移交投影核金值（P=锚/66/0/100 + 逐 token 单调）。本 ADR Consequences 所记的级联事实（ThemePresenter 以 body.style.setProperty 落值、行内恒胜样式表）即退役的裁决依据；「随动族 token 经 tokenOverrides 行内覆盖静态同名」从此收窄为「随动族 token 唯一走 tokenOverrides」。
 
 ## 附录：grill 共识 13 项决策（Q1–Q13，2026-09-01 会话存档）
 
