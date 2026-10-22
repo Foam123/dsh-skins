@@ -5,11 +5,11 @@
  * bounds and per-token monotonicity.
  *
  * The golden (rgb, baked) tables below are hand-copied verbatim from the
- * current baked CSS blocks (openbmc-harness/index.js:150-224,
- * uefi-harness/index.js:63-114) and the riding tables / meirenzhi offsets —
- * they are the INDEPENDENT baseline that survives the translucency.js
- * extraction (where the same numbers start living in the per-skin
- * declaration table). Do NOT regenerate them from the code under test.
+ * per-skin RIDING declaration tables (the only carrier since ADR-0017
+ * retired the static riding CSS blocks; historically they were transcribed
+ * from those baked blocks) — they are the INDEPENDENT baseline that
+ * survives the translucency.js extraction. Do NOT regenerate them from
+ * the code under test.
  *
  * The expected-value helpers re-implement the projection math on the test
  * side (pivot rebase, hinged blur curve, desktop boost) so a formula drift
@@ -17,18 +17,9 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { createOpenBmcHarness } from "../src/client/skins/openbmc-harness/index.js";
 import { createUefiHarness } from "../src/client/skins/uefi-harness/index.js";
 import { createMeirenzhiSkin } from "../src/client/skins/meirenzhi/index.js";
-
-const SRC = {
-  openbmc: fileURLToPath(new URL("../src/client/skins/openbmc-harness/index.js", import.meta.url)),
-  uefi: fileURLToPath(new URL("../src/client/skins/uefi-harness/index.js", import.meta.url)),
-};
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const countMatches = (haystack, pattern) => (haystack.match(new RegExp(pattern, "g")) ?? []).length;
 
 const GOLD = {
   openbmc: {
