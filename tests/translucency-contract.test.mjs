@@ -265,7 +265,7 @@ for (const [skinId, spec] of Object.entries(GOLD)) {
 }
 
 // ---- ADR-0017: reverse pin — riding tokens are table-channel ONLY ----------------
-// The static riding block (ridingDecl interpolations, the ADR-0004 byte-equality
+// The static riding interpolation block (the ADR-0004 byte-equality
 // carrier) is retired: tokenOverrides → ThemePresenter inline style is the
 // single channel (meirenzhi-proven in production). Successor of the retired
 // count pins — from "constructed equality" to "constructed absence": no skin

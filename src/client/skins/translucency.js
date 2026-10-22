@@ -12,18 +12,11 @@
  * 投影不感知 profile：Desktop 出厂 66 属字段目录的默认层，只经 values
  * 进入；本模块永远不知道自己跑在哪个 profile 上。
  *
- * ridingDecl(table, tokenKey, mode) 只读取 table.riding 与 table.anchor——
- * 皮肤可先以 { anchor, riding } 局部规格插值 CSS 模板、再将其并入完整
- * 声明表（同一引用，字节必然一致）。
+ * riding 全走 tokenOverrides 单通道（ADR-0017）：ThemePresenter 以 body
+ * 内联 style 落值、恒胜样式表，静态 riding 声明已随 ADR-0004 锚点字节
+ * 不变式一并收档——CSS 模板不持任何 P 相关值。
  */
 import { resolveImageRef } from "../../shared/personalization/catalog.js";
-
-/** riding token 在出厂锚点处的声明行（CSS 模板插值用，值 = 烘焙字面量）。 */
-export function ridingDecl(table, tokenKey, mode) {
-  const [rgb, baked] = table.riding[tokenKey][mode];
-  const alpha = (Math.min(100, Math.max(0, table.anchor + baked - table.anchor)) / 100).toFixed(2);
-  return `${tokenKey}: rgba(${rgb}, ${alpha});`;
-}
 
 /** 玻璃规则单行（camelCase body 属性 → data-kebab 作用域）。 */
 export function glassRule(bodyAttribute, glassVar) {
