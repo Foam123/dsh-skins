@@ -289,9 +289,14 @@ if (switcher.opts.label() !== "Theme Switcher") throw new Error("slot label must
 activeLocale = "zh";
 console.log("✓ skin descriptions and slot label localize with the active UI locale");
 
-// Force the popover open. useState order: open, active skin, box,
-// personalize view, theme preference.
-stateOverrides = [true, "openbmc", { left: 20, bottom: 50 }, null, "dark"]; // active = factory default
+// Force the popover open. useState order across the gatekeeper + body:
+// [gatekeeper] mirror bump counter, then [body] open, active skin, box,
+// personalize view, theme preference. The 0 is the bump counter's seed — the
+// gatekeeper reads the placement straight off the config client and only
+// uses this hook to re-render when that mirror changes.
+// No config client is mounted in this stub, so the placement reads "factory"
+// and the row renders (the sidebar-entry default is asserted separately).
+stateOverrides = [0, true, "openbmc", { left: 20, bottom: 50 }, null, "dark"]; // active = factory default
 const openTree = renderThrough(switcher.comp({ wide: true })); // 穿过壳接管 gatekeeper
 const portal = openTree.props.children[1];
 if (!portal?.$$portal) throw new Error("open switcher should render a portal");

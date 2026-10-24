@@ -93,8 +93,14 @@ test("validateOverride: unknown skin fields are rejected", () => {
   assert.deepEqual(validateOverride("unknown-skin", "slogan", "x"), { ok: false, code: "UNKNOWN_FIELD" });
 });
 
-test("titleBrand is no longer personalizable (v2.4.1 #5)", () => {
-  assert.deepEqual(validateOverride("meirenzhi", "titleBrand", "美人志"), { ok: false, code: "UNKNOWN_FIELD" });
+test("titleBrand is personalizable again (v1.6.0, owner request)", () => {
+  // v2.4.1 #5 retired the field; the owner asked for a custom brand name in
+  // the sidebar, so it returns as a single-scope text field, length-capped.
+  // The " — " separator stays runtime-owned and never enters this value.
+  assert.deepEqual(validateOverride("meirenzhi", "titleBrand", "凡人修仙传"), { ok: true });
+  assert.deepEqual(validateOverride("meirenzhi", "titleBrand", ""), { ok: true });
+  assert.deepEqual(validateOverride("meirenzhi", "titleBrand", "x".repeat(25)), { ok: false, code: "BAD_VALUE" });
+  assert.deepEqual(validateOverride("meirenzhi", "titleBrand", { zh: "甲", en: "A" }), { ok: false, code: "BAD_VALUE" });
 });
 
 test("validateOverride: locale text requires complete {zh,en} objects", () => {
@@ -203,8 +209,9 @@ test("mergeValues: unknown skin yields empty values without throwing", () => {
 
 test("accessors expose schema, fields, asset fields and defaults", () => {
   const schema = getSkinSchema("meirenzhi");
-  assert.equal(schema.fields.length, 3);
-  assert.deepEqual(schema.fields.map((field) => field.key), ["wallpaper", "slogan", "panelOpacity"]);
+  assert.equal(schema.fields.length, 5);
+  assert.deepEqual(schema.fields.map((field) => field.key),
+    ["wallpaper", "titleBrand", "slogan", "panelOpacity", "frost"]);
   // Six curated pieces; yuntai leads the grid (user ruling) and is the
   // factory default.
   const wallpaperField = getField("meirenzhi", "wallpaper");
@@ -223,7 +230,8 @@ test("accessors expose schema, fields, asset fields and defaults", () => {
   assert.equal(getField("meirenzhi", "panelOpacity").default, 35);
   assert.deepEqual(listAssetFields("meirenzhi").map((field) => field.key), ["wallpaper"]);
   assert.deepEqual(listAssetFields("openbmc").map((field) => field.key), ["wallpaper"]);
-  assert.equal(defaultsFor("meirenzhi").titleBrand, undefined);
+  assert.equal(defaultsFor("meirenzhi").titleBrand, "美人志", "brand default is the skin's own title");
+  assert.equal(defaultsFor("meirenzhi").frost, 86, "frost defaults to the historical 86% recipe");
   assert.equal(defaultsFor("meirenzhi").wallpaper, "builtin:meirenzhi:yuntai");
   assert.equal(defaultsFor("uefi-harness").wallpaper, "builtin:uefi-harness:art");
 });

@@ -74,7 +74,8 @@ export function createUefiHarness({ jsx }) {
     "--dsw-specific-input-major": { light: ["255, 255, 255", 62], dark: ["42, 34, 78", 55] },
   };
 
-  const css = `
+  // Rebuilt per projection so the frost knob reaches the floating-layer family.
+  const buildCss = (frost) => `
 /* 配色 token（常量族 + 随动族）一律走声明表 → constantTokens / riding →
  * tokenOverrides（ADR-0016 C1 + ADR-0017），CSS 模板只持品牌装饰段。 */
 ${rootClear("body[data-dsh-uefi-harness]")}
@@ -86,7 +87,7 @@ ${streamingCss("body[data-dsh-uefi-harness]", { decay: "169, 156, 255" })}
  * 本皮肤只持描边色。 */
 ${decorationCss("body[data-dsh-uefi-harness]", { light: "101, 83, 216", dark: "169, 156, 255" })}
 
-  ${frostFamilyCss("body[data-dsh-uefi-harness]", TINTS)}
+  ${frostFamilyCss("body[data-dsh-uefi-harness]", TINTS, { frost })}
 
 
 
@@ -1086,7 +1087,9 @@ ${decorationCss("body[data-dsh-uefi-harness]", { light: "101, 83, 216", dark: "1
       sentinel: "builtin:uefi-harness:art",
       placeholder: null,
     },
-    staticCss: css,
+    frostSurface: { light: "247, 245, 255", dark: "39, 31, 73" },
+    buildStaticCss: buildCss,
+    staticCss: buildCss(86),
   };
 
   const project = createProjection(table);

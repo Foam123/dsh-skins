@@ -17,6 +17,38 @@
 
 export const CONFIG_VERSION = 1;
 
+/**
+ * Plugin-wide UI preferences (not per-skin). Persisted under the state's
+ * top-level `ui` object — the same config file, but deliberately OUTSIDE
+ * `skins` so the per-skin schema, the personalization panel and the
+ * skin-load normalization never see it. Unknown keys are dropped on load
+ * (same doctrine as skin sections), so the shape stays closed.
+ */
+export const UI_PREFERENCES = {
+  /**
+   * Where the switcher entry lives. "settings" (the factory default) keeps
+   * the sidebar foot clean — the skin surface is reachable from
+   * Settings → Skins; "sidebar" restores the bottom-left row for users who
+   * switch skins often.
+   */
+  entryPlacement: { key: "entryPlacement", values: ["settings", "sidebar"], default: "settings" },
+};
+
+/** Default UI preference values, rebuilt per call (callers may mutate). */
+export function defaultUiPreferences() {
+  const value = {};
+  for (const preference of Object.values(UI_PREFERENCES)) value[preference.key] = preference.default;
+  return value;
+}
+
+/** Validate one UI preference value. Returns { ok, code } like validateOverride. */
+export function validateUiPreference(key, value) {
+  const preference = Object.values(UI_PREFERENCES).find((entry) => entry.key === key);
+  if (preference === undefined) return { ok: false, code: "UNKNOWN_FIELD" };
+  if (!preference.values.includes(value)) return { ok: false, code: "BAD_VALUE" };
+  return { ok: true };
+}
+
 export const FIELD_TYPES = ["text", "color", "image", "select", "range"];
 export const SCOPES = ["single", "locale", "colorScheme"];
 
@@ -51,6 +83,40 @@ export const USER_IMAGE_MIMES = ["image/png", "image/jpeg", "image/webp", "image
 // Catalog data
 // ---------------------------------------------------------------------------
 
+/**
+ * Per-skin field templates. Every skin spreads these and fills its defaults,
+ * which is what keeps the standard field set identical across skins without
+ * copying the definitions (ADR-0004).
+ */
+const BRAND_FIELD = {
+  key: "titleBrand",
+  type: "text",
+  scope: "single",
+  labelKey: "personalization.titleBrand",
+  maxLength: 24,
+  default: null, // filled per skin below: each skin's own title
+};
+
+/**
+ * Overlay frost: how opaque (and how blurred) the floating layer family is —
+ * the settings dialog, plugin popovers, dropdown menus. Separate from
+ * panelOpacity on purpose: that knob paints the app surfaces UNDER the
+ * content, while this one decides whether text over a BUSY wallpaper stays
+ * readable inside a dialog. 86% is the historical配方 value every skin
+ * shipped with, so the default is a no-op for existing users.
+ */
+const FROST_FIELD = {
+  key: "frost",
+  type: "range",
+  scope: "single",
+  labelKey: "personalization.frost",
+  min: 0,
+  max: 100,
+  step: 1,
+  unit: "%",
+  default: 86,
+};
+
 const WALLPAPER_FIELD = {
   key: "wallpaper",
   type: "image",
@@ -78,6 +144,7 @@ export const SKINS = {
     builtinAssets: { art: { mime: "image/webp", labelKey: "personalization.openbmc.art" } },
     fields: [
       { ...WALLPAPER_FIELD, default: "builtin:openbmc:art", builtinChoices: ["art"] },
+      { ...BRAND_FIELD, default: "OpenBMC Studio" },
       {
         key: "slogan",
         type: "text",
@@ -97,12 +164,14 @@ export const SKINS = {
         unit: "%",
         default: 55,
       },
+      { ...FROST_FIELD },
     ],
   },
   "uefi-harness": {
     builtinAssets: { art: { mime: "image/webp", labelKey: "personalization.uefi.art" } },
     fields: [
       { ...WALLPAPER_FIELD, default: "builtin:uefi-harness:art", builtinChoices: ["art"] },
+      { ...BRAND_FIELD, default: "UEFI Studio" },
       {
         key: "slogan",
         type: "text",
@@ -122,6 +191,7 @@ export const SKINS = {
         unit: "%",
         default: 55,
       },
+      { ...FROST_FIELD },
     ],
   },
 
@@ -146,6 +216,7 @@ export const SKINS = {
           "nangongwan", "nangongque", "yinyue",
         ],
       },
+      { ...BRAND_FIELD, default: "美人志" },
       {
         key: "slogan",
         type: "text",
@@ -165,6 +236,7 @@ export const SKINS = {
         unit: "%",
         default: 35,
       },
+      { ...FROST_FIELD },
     ],
   },
 };

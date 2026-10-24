@@ -39,7 +39,7 @@ const TINTS = {
 // inlined as a data URL (2026-09-01 ruling — dragon plate reverted).
 const MARK_URL = "data:image/webp;base64,UklGRqgNAABXRUJQVlA4WAoAAAAQAAAAXwAAXwAAQUxQSPUDAAABoHZtmyFJln8HGmvbtm3b+Gbbtm3btm3btneM1bAi4llv9hsZERPAf/cx8PfoaeXogcnnmWfu8SC2UHAwxwEPDJX07flz4FzLuAjrP9DRv444GlyreMcCL0hK+W8lSbfSqgFOTMpZ/3GsDiS0h4dbpKz/nMu7LeLhaXX0vwfNSWgJB3ero/9dNHBWfDtEzlNHDXZ0HrEVIhsqqcmkm9rB0fOtSkO7t0PkCCU1PA++Dej+VqWp+VpilqSGk7YjtsJ8ajrrZXwrzNppSkVrEttgyhGNZb2KbwM+LLkhZR1AV32RjdSYspanqzoCR6s0VfTNxMTq8GzdKQ0p660eYnUOhmtsKo0o6WVHrI3AfpJUGlHSK1PQVRuO5XfY9U2VRpT09Rx0ucrwAMcpN6Ks3zeHWBkhdjlOUG5ERTqpixDqApznJeVGpKKP14DoKyOw8NjSkJJ0xzwQfV10cZRyQypF+ZIZIPqqHL39VBqSsjTivKmgy1VEF4cpNSZlafi500H09TgmHKg+TdLQIyeH6GohcrFSX0hJGnb6VBBrCSypPk/S8KPHxYU6gA9V+khK0rfbQZerInKeUp9JSXp1IYg1BDZSNqCSlE6eBOftOab6XTaL1H8b6DIHfKhiQkrS4zMQvLXA7UpGpKTh20EwFjnKkLJ0Qy/BVmAdZTtSR29FginPorLd0VPgbc1RbCnpAZwz5JhmhDF1dATR1Lj9VGwpaTWipZ7vzRX9NC7OUO+P5pR0AtEM8LE9lZEz4c14XlY2l3QG0dBTFRR914OzErivAmWtR7Bzh5K9pOvtRK6rQRo4Hs7MpXVoCYKZs6pI2pZo5rhKTjK0UyUXmQmsq1zFZYaWUo1Jl5rxzF3JJWYc04yo43RD7jOVGg4wg+d5ZXtZ6xCsRK5VsqfOLHg7B1dQ9FXEWQmsoGIu6T4CVh1T/q4KjiaawfGasrWs9Qh2IqcpWUs6mW47nsWLzJexq9NtBs9rytakX+YjmAlsVEFRv8XxVvA8o2xNWf26cFYCq1RQ8sBx7RC4TsnaWJ1KxKxn4p9VbHX0PDg7RDZQNtXRm+PisRzZU8lQR2+PT8B2ZE/lYqWjJ7uJWA/sKiUTpegmCNiPrPGdlPouSYdBoMbIBOdLyn2U9OMyeEedERa/IUspN1eyHp6CLqp1ERa6YYSkknIjSToWIjWHCDPu/vCvklT+V5Y+WQMXqNwHYOrVD3tmpP5nKSonBqKjfh89wKQPKv+HkqS7F4VIS7oQIzONLP9SsvTmGhAdbdrNFUp/K1n6ZAcIgXb1zD86SylLn+/mIdK6ji/19/e2CBBp4cAOw0b1u3YDIDpa2THZzBMA0dHWHogB2wBWUDggjAkAALAkAJ0BKmAAYAA+TR6LRCKhoRh+TLQoBMSgCFiGlfM+ZPYO3bGbsDepXbX88V6Sd5h3n2uqvvHgv3+/csie436lPs+En4magXrDwGdhtZn0Avar7LxDfXDoc7zD7N/oPYA/nf9f/4f3AfHv/qf6H8yvZx9G/+b/N/AN/Lv61/yP8B7Uv//9wv7UeyD+sAx8FmpO+3a3JzsHA+l04d6+6aN1gy87tPxhcOjxultTnrN2cS3u0OJ8XjQ16a/TfXNi6gzkzo6QTA7tIibmU3GUX9D+gPIJJaHj+vLMezRWsWus5msSxWdJLnAHqdccnKCtxvV+Yu9kswCFzOLS8xcs1NRLFmfDzHwEr/dbzKz/kB0KJUO2y6iJfB2wUDoOk4DfdyQNirUV/cRb/8t99K7AAP77KfozPJGx5Q4+pcnuhz51qg5EcU9PrxBcAZ0/YUM+KQKNzuboi0lREzQdb5wZA2LyAMZ/0plhAEPtDZ38BbQGtfp5CUT5kv5nDq9bnVy35P8UmNQ4N9bgjDq1SQOaeDUz5wFXIZkARw6LRVBQYZhP+2sq641nceNKR5OQZbiCzIntVNcWMg1mvJYepq5/izQ4hnTrv03E4KWYkfcGynBGtZaOIGklVSnAJbpMVbDVGn19gYlShYHVD3q+Q75/Jjo0+1ONrMnnwYqb5xxoMlmqEKP5rE6tMO2DNMcs9MTjoEK4Grmr22EwBEAwqRcrXfcqEyjvtsIqz/Nf7tbNAWhkeAaZB9CsGwWt0zqdvn2DIfNJvoJJugkp6FH5Da2TZcFckLhqLLsbTuKK7VouXnjv+vLD3qFaf8zcA4mMEtMFPhHcNp24Qj2cENgNXbiG2Q9WdIwfb/n1NbIJPB5PbZ9C3/kKH8DGB1M8567IuTWTDRVqXHLQpVo+obHEgBMeA3HYxaOWe5BOz6Mk/LQbJn9aHXWp+paDJw26a4SIs4ux3n9gP1KN2qc38TjwLaOD82ibIcTe+jKZsZO4Y6rRkLscPRILCx+4LR+/C5Of45sdn/HFPO9FcxZ0eBniDomglILS2bozcZ18+RoUGBBwodp2PMCtlrs0L/ciaGH4VhGlsglZzRDnlo0eAvI+mDzH5OnzUG0GeP53Prnc0UXwH/QnXuMG7jCf1Lp4fooLI3sDevCxo+XNbzynXP2yvIg+VMb/4Zz//h1jBtWL/v2XP+Z34n+05n/e/4nDZ4eQHnS5SzsuWz3DpKwU8S4QkOhPw89ZBHr8vyzD8777iOGbxEd1oVhdyk2shldrCIGCm/Ue9IcAEV++sf+1kjJpQTiFkaaU1ygRnbdHFZz5OJXkpiHl+YkUgtpKM9Np9Gghc4RWfkrAl7b7tFvD++JOYvUyc9cwPYMrxDMTyH7m2E43607liLpf5wKOejRacRYWoj+dDas97icMprqrF9RgC+bfqUyIatfY3M2PIKIhysIq9kjRabfRjAJOdf04Lu7YW8Aqlbf7R+agBldCrqs8u97TPRvpgCobgqVEC0N9cZOgdUSATue4tdZlSUi2p8rogfktvsNN9OZtAzKAtYKr/HvnQUY85+/kLIDE6/B7ahAvwuNXfYeqJg+kr+3ej9l0laJtWXNxz2TVQ5Zi7otb4Uc6N84Tvd1smqegBb5Td/qqR48OlFELgacAqZ6FisBwGYhVVSve9cwNGi8pbncUjDYq8S5/YR4Tszoq5wUsx1GhEbSV9oEnn83+ObhaPso5tjmq7yZDM6vDeBvxGf/yx3Gudg9UrqNI5v7YJ2TdId5DBtSXnXS+h1XFWWKMRxYfXHHa3A/tIgskRJ8w90Ei7hYynL+7g/0iO537mBjTXqWrt8t+kNLjn9I2SRwZs5zcQRVzO+uBsYmqbBFQ8jrR46S4l/PZkRzwYe9w0P/IlMIuXD4bk25aRcaW1jhutOeYJICeUy1XCKm7wUv3XLKHX3iD8MR02uepp9ZX3S/dWryNxx4qcnECJGP/oN8pYj0aKaWiYOiBu8sXX0F7ijmJBg7ATyYoGem5d16iU5PohWTk/wSA3M35SeV1ADNrBQ5IVSO4JcB3PItBpPdBoRrI8Om8FYcXVmkGuU9A3uTkFfQjbAZQiNwmhz6aoGYUIZRTo7ghwX9a/axNXpqg9VGdMgvoDUQsocIq8HU7ORW/zS72JNCxRlsu/cYhLB4eP9FOCcNB9hfRtJcgf2pkrjmm/x85zO4bOO+xJ+6/sjdDl16G1OuEinx2NLCipJA/3Bdd4rHPpUaxjLvdq+c1//8Ips4Mh2uf5WneOFh2NljtuXCo2wfsIytLwj5jS35B/2Oz5O6ANIyrpbIP6EGDAbTCYyq1ggFf9U2mHppOZVczEP3F61+h3kWF2NTngUxCYAotVazubY2VBD8gkKuiVvn2ocouI59JxPHO7wN0J2zBLfPSyMIv/BXpvQI9DOpqq90ZtpBSo7X2AhKGnoUG6faCGqHDQupXzVWR3vT4+KD3cIGIwQ7yeHOn99DCAtae+tDBr51voAaREsId8UjRX58L++IaK0e2AsIoIjmjvtOAUjHRt9Y4zE1cMpBDdoMyJI4ZpB5rfcoJ/nzMc99Sz1udYJyiNNzSE7DSxeVnn/mzxd7lgZGhU6XF1sfFnPgbOkZV3Q10Ri81FQNh/NKXcaTIOpBPaRfQ3zW21B9TReZT8sgfm+8L8o/kOyt4/DxAh1jOc4/hB9aLDmsvKL8elXkbpWB9JLen35pCFZ8vAsR/gLTnyh3YYbKLjzZqmai8LfMiJTX2+oYSkJNFTJ9L721XzoRcoue38LrwxM7TXttgH/UmmZB/491XuDAjJ/qRKXcBU0iX7udU89Bd7C46ab117yp4E31E4sUoJsXoHAV3U41HA6xWoRMaAxqCGVFdPOxaO2EeuEO34wb8GhZFRZObxsIWe4HBNNjMhPaRkma/1yHHx8x0NsDFfXkZ7d4GwvfiAeZbNfsNz6gOYRfsfyMSnThFeU/AOdNB1uOHx/JChnK8dtxkwzZ7q+vND4PMn51KUR7cQvyOzdVUXeYNwP8GfvKNRocp/+HYytgpnYyaUS1fC/iS4jGoAQCjbmcTgJZ3p1f9sZlPm2epmgNIMcNOmffzxgjBo4bU2t4yNSFx2mU5HalgVLqLS4/cbR3DHrmKs7Hsbg+ofxAy9pPjDuor4SBKokWeXiyWa/Q6bCCoJGY1WBu25ku4YPyEjEvBxnK7/XwrSqHED7QDlG6Tw+BS3rlty9ZP/K1X49wcLMjIOgIWNNpelEe/TfSW9s0BKgAA";
 
-const CSS = [
+const buildCss = (frost) => [
   // 反色徽章（official HARNESS 反色语言，tgcf badge 同构）：规则唯一来源在
   // ../decoration.js（ADR-0016）；#12121A/#FAF9F6 与面板底色族同源。
   badgeCss(SCOPE, ".dsh-mrz-badge",
@@ -68,7 +68,7 @@ const CSS = [
   `@media (prefers-reduced-motion:reduce){${SCOPE}::before,${SCOPE} #root::before,${SCOPE} #root::after{animation:none}}`,
   // 浮层毛玻璃家族（菜单三件套 + 冻层全段）：配方与选择器并集的唯一来源在
   // frost-family.js（ADR-0012），本数组只注入 SCOPE 与 tint。
-  frostFamilyCss(SCOPE, TINTS),
+  frostFamilyCss(SCOPE, TINTS, { frost }),
 ].join("\n");
 
 const builtinAssets = {
@@ -121,7 +121,12 @@ const table = {
   glassVar: "--dsh-mrz-glass-blur",
   desktopBlur: { rate: 55, dark: "boost" },
   wallpaper: { kind: "assets" },
-  staticCss: CSS,
+  // Floating-layer base (settings dialog, plugin popovers): the warm-paper
+  // family; the frost knob decides how much of it survives over the art.
+  frostSurface: { light: "252, 250, 246", dark: "24, 24, 34" },
+  // Rebuilt per projection so the frost knob reaches the floating-layer family.
+  buildStaticCss: buildCss,
+  staticCss: buildCss(86),
 };
 
 const project = createProjection(table);

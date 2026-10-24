@@ -161,7 +161,8 @@ export function createOpenBmcHarness(jsxRuntime) {
     "--dsw-specific-login-input": { light: ["255, 255, 255", 60], dark: ["18, 42, 60", 65] },
   };
 
-  const CSS = `
+  // Rebuilt per projection so the frost knob reaches the floating-layer family.
+  const buildCss = (frost) => `
   /* ---------- ③ 配色：token（常量族 + 随动族）一律走声明表 → constantTokens /
      riding → tokenOverrides（ADR-0016 C1 + ADR-0017），CSS 模板只持品牌装饰段 ---------- */
 
@@ -190,7 +191,7 @@ export function createOpenBmcHarness(jsxRuntime) {
   /* 注意：不要用类名选择器定位侧栏元素 —— 插件样式经 CSS modules 哈希，
    * 类名不可预测；一律通过 token 或 data-* 属性作用。 */
 
-  ${frostFamilyCss("body[data-dsh-openbmc-skin]", TINTS)}
+  ${frostFamilyCss("body[data-dsh-openbmc-skin]", TINTS, { frost })}
 
 
 
@@ -1675,7 +1676,9 @@ export function createOpenBmcHarness(jsxRuntime) {
       sentinel: "builtin:openbmc:art",
       placeholder: { light: PLACEHOLDER_LIGHT, dark: PLACEHOLDER_DARK },
     },
-    staticCss: CSS,
+    frostSurface: { light: "255, 255, 255", dark: "22, 48, 67" },
+    buildStaticCss: buildCss,
+    staticCss: buildCss(86),
   };
 
   const project = createProjection(table);

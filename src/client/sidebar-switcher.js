@@ -1,5 +1,7 @@
 import { DICTS, NS, formatTemplate } from "./dicts.js";
 import { createPersonalizationPanel, PANEL_CSS } from "./personalization/panel.js";
+import { renderThemeIcon, THEME_CHOICES } from "./appearance.js";
+import { createSkinsSettingsSection, SETTINGS_CSS } from "./settings-page.js";
 import { getSkinSchema } from "../shared/personalization/catalog.js";
 
 const TAG_ID = "dsh-skins/sidebar.css";
@@ -129,11 +131,8 @@ export function sweepShellHeight(shell, { from, fromWidth, maxHeight, duration =
   shell.addEventListener?.("transitionend", onEnd);
   return finish;
 }
-const THEME_CHOICES = [
-  { id: "light", labelKey: "appearance.light" },
-  { id: "dark", labelKey: "appearance.dark" },
-  { id: "system", labelKey: "appearance.system" },
-];
+// THEME_CHOICES / theme icons: shared with the Settings → Skins page
+// (./appearance.js) so both surfaces always offer the same three choices.
 
 const SHELL_CSS = [
   '[data-slot="sidebar.footer.action"]{display:flex!important;flex-direction:column;width:100%;min-width:0}',
@@ -258,7 +257,7 @@ const SHELL_CSS = [
 /** Single style tag composition: shell chrome first, then the surface
  *  modules' owned CSS. The order IS the cascade contract (equal-specificity
  *  pairs must not cross blocks) — pinned by tests/sidebar-switcher.test.mjs. */
-const CSS = [SHELL_CSS, PANEL_CSS].join("\n");
+const CSS = [SHELL_CSS, PANEL_CSS, SETTINGS_CSS].join("\n");
 
 export function installSidebarSwitcher(ctx, { runtime, jsx, react, reactDom, configClient, skinsById }) {
   function fallbackTranslate(key, params = {}) {
@@ -290,6 +289,21 @@ export function installSidebarSwitcher(ctx, { runtime, jsx, react, reactDom, con
     })
     : null;
 
+  // Settings → Skins page. The official settings shell renders
+  // `settings.section` list entries; registering here (instead of only in
+  // the sidebar row) is what keeps the surface reachable when the user moves
+  // the entry out of the sidebar foot.
+  const SkinsSettingsSection = createSkinsSettingsSection({
+    jsx,
+    react,
+    runtime,
+    configClient,
+    tr: localeTranslate,
+    PersonalizationPanel,
+    getThemePreference: () => ctx.theme?.getTheme?.().preference ?? "system",
+    setThemePreference: (id) => ctx.theme?.setTheme?.(id),
+  });
+
   function GearIcon() {
     return jsx("svg", {
       width: 16, height: 16, viewBox: "0 0 24 24", fill: "none",
@@ -317,25 +331,40 @@ export function installSidebarSwitcher(ctx, { runtime, jsx, react, reactDom, con
   }
 
   function ThemeIcon({ id }) {
-    if (id === "light") {
-      return jsx("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: [
-        jsx("circle", { cx: "12", cy: "12", r: "4", stroke: "currentColor", strokeWidth: "1.6" }),
-        jsx("path", { d: "M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }),
-      ] });
-    }
-    if (id === "dark") {
-      return jsx("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: jsx("path", { d: "M20 15.2A8.2 8.2 0 0 1 8.8 4a8.2 8.2 0 1 0 11.2 11.2Z", stroke: "currentColor", strokeWidth: "1.6", strokeLinejoin: "round" }) });
-    }
-    return jsx("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: [
-      jsx("rect", { x: "3", y: "4", width: "18", height: "13", rx: "2.5", stroke: "currentColor", strokeWidth: "1.6" }),
-      jsx("path", { d: "M8 21h8M12 17v4", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }),
-    ] });
+    return renderThemeIcon(jsx, id);
   }
 
-  // Footer gatekeeper: while a shell takeover is live (negative-priority
-  // occupant on sidebar.workspaces), the whole foot is that shell's native
-  // surface — render nothing at all here.
+  /** The persisted entry placement, read straight off the config client.
+   *  Absent client (no fetch) or an unloaded snapshot both mean "factory",
+   *  which is the sidebar row — never a silently hidden entry. */
+  function sidebarEntryVisible() {
+    const placement = configClient?.getState?.().ui?.entryPlacement;
+    return placement === undefined || placement === null || placement === "sidebar";
+  }
+
+  /** Force a re-render whenever the config mirror changes, so the placement
+   *  read below is always current. The value itself is read during render
+   *  (not mirrored into state): copying it into a hook would let a missed
+   *  first emit latch a stale boolean, and the read is cheap.
+   *
+   *  Without the subscription the row would only appear/disappear on some
+   *  other render — i.e. after a reload — and the settings toggle would look
+   *  dead right next to it. */
+  function useConfigMirror() {
+    const [, bump] = react.useState(0);
+    react.useEffect(() => {
+      if (!configClient) return undefined;
+      return configClient.onStateChange(() => bump((value) => value + 1));
+    }, []);
+  }
+
+  // Footer gatekeeper: render nothing at all when the user moved the entry
+  // into Settings (ui.entryPlacement !== "sidebar"), or while a shell
+  // takeover is live (negative-priority occupant on sidebar.workspaces) —
+  // the whole foot then belongs to that shell's native surface.
   function SidebarAction(props) {
+    useConfigMirror();
+    if (!sidebarEntryVisible()) return null;
     if (shellTakeover()) return null;
     return jsx(SidebarActionBody, props);
   }
@@ -642,4 +671,21 @@ export function installSidebarSwitcher(ctx, { runtime, jsx, react, reactDom, con
       return fallbackTranslate("skins.switch");
     },
   }, SidebarAction));
+
+  // Settings → Skins page. Order sits just above the official General
+  // section (0) and below the plugin pages that own higher seats, so the
+  // nav reads: General → Skins → cost-meter/other plugin sections.
+  ctx.slots.inject("settings.section", () => ctx.slots.register({
+    name: "settings.section",
+    id: "dsh-skins",
+    order: 5,
+    locale: NS,
+    label: () => {
+      try {
+        const text = ctx.locale?.translate?.(NS, "settings.title");
+        if (typeof text === "string" && text !== "settings.title") return text;
+      } catch {}
+      return fallbackTranslate("settings.title");
+    },
+  }, SkinsSettingsSection));
 }

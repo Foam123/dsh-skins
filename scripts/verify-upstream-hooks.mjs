@@ -349,8 +349,13 @@ if (layout === "") {
 		problems.push('shell-frame hook dead: "data-windows-titlebar" no longer in dsh-client-ui-layout — the public Desktop marker drifted (ADR-0009)');
 	}
 	for (const name of ["frame", "sidebarCol"]) {
-		// Hashes may be underscore-led (`_2H3hWW_root`, 0.2.0-rc.2 desktop build).
-		if (!new RegExp(`\\.[A-Za-z0-9_]+_${name}[{,:\\[.]`).test(layout)) {
+		// Hash alphabet is build-dependent: underscore-led on the 0.2.0-rc.2
+		// desktop build (`_2H3hWW_root`), HYPHENATED on 0.2.1-rc.3
+		// (`.mP3x-q_frame`, `n-Yh7q`). The production selectors are attribute
+		// substrings (`[class*="_frame"]`), so a hyphen in the hash is
+		// irrelevant to them — the check must accept the same alphabet the
+		// browser does, or it reports a dead hook that is alive.
+		if (!new RegExp(`\\.[A-Za-z0-9_-]+_${name}[{,:\\[.]`).test(layout)) {
 			problems.push(`shell-frame hook dead: no .*_${name} class selector in dsh-client-ui-layout — the AppFrame local name drifted, re-derive the ADR-0009 selectors`);
 		}
 	}

@@ -113,8 +113,10 @@ Every skin's key visuals are open to adjustment. Click the gear button on a skin
 | Field | What you can do | Factory value |
 |---|---|---|
 | **Wallpaper** | Pick from the skin's built-in artwork, or upload your own images into a personal library | Each skin's default artwork |
+| **Brand name** | What the sidebar brand seat and the tab-title brand segment show; leave it empty for the skin's own name | Each skin's own name |
 | **Slogan** | The new-session guidance line, one Chinese and one English copy | The skin's factory slogan |
 | **Translucency** | 0–100%, one value driving three visual layers: panel tint, wallpaper scrim and blur. 0% is pure, fully visible wallpaper; 100% hides it completely | meirenzhi: Web 35%, Desktop 66%; openbmc / uefi-harness: Web 55%, Desktop 66% |
+| **Overlay frost** | How frosted (and how blurred) the settings dialog and other floating layers are. **Higher** makes them more solid so the wallpaper pattern cannot bleed through — use this when text is hard to read; **lower** makes them more see-through | 86% (identical to the pre-knob recipe, so upgrading changes nothing) |
 
 > meirenzhi ships zero wallpaper blur and no global glass at or below its Web factory value (35%) (ADR-0010) — the wallpaper stays native-crisp; blur ramps smoothly above 35% up to 12px at 100%.
 
@@ -156,14 +158,21 @@ In the **DSH Desktop app**, the shell chrome — sidebar, caption strip, right p
 
 This section answers: what lives in the switcher and how to use it.
 
-The **Skin Switcher** popover at the bottom of the sidebar has two sections:
+Skin settings live in two equivalent places:
+
+- **Settings → Skins** (the factory default): a page in the settings navigation with appearance, the skin list, a personalization gear per skin, and the **Sidebar entry** switch at the bottom.
+- **The "Theme Switcher" popover at the bottom of the sidebar**: appearance + skin list + per-skin gears. This entry is **hidden by default**; turn on Settings → Skins → Sidebar entry to get it.
+
+Both surfaces offer:
 
 1. **Appearance**: Light, Dark, System. It calls the official theme service and stays in sync with Settings → General → Appearance.
-2. **Choose Skin**: the first entry is DeepSeek Harness (Official), followed by the extension skins. Clicking switches instantly and persists the choice; the popover stays open for continuous preview.
+2. **Choose Skin**: the first entry is DeepSeek Harness (Official), followed by the extension skins. Clicking switches instantly and persists the choice; in the popover form it stays open for continuous preview.
 
 ![Skin switcher popover — appearance and skin list](docs/assets/preview-switcher.webp)
 
-When the sidebar is collapsed, the entry folds into a round palette icon; multiple `sidebar.footer.action` entries stack vertically without overlapping. Choosing "Official" only undoes the extension skins — your light/dark/system preference is untouched.
+With the sidebar entry enabled, a collapsed sidebar folds it into a round palette icon; multiple `sidebar.footer.action` entries stack vertically without overlapping. Choosing "Official" only undoes the extension skins — your light/dark/system preference is untouched.
+
+> Upgrading from an older version: the sidebar entry used to be on by default. If it disappears after the upgrade, turn on **Sidebar entry** in Settings → Skins; leave it off to keep the foot clean.
 
 The URL switches skins too: `/?skin=official`, `/?skin=openbmc`, `/?skin=uefi-harness`, `/?skin=meirenzhi`.
 

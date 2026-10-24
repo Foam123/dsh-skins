@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { installSidebarSwitcher, sweepShellHeight } from "../src/client/sidebar-switcher.js";
 import { PANEL_CSS } from "../src/client/personalization/panel.js";
+import { SETTINGS_CSS } from "../src/client/settings-page.js";
 import { createFakeReact, jsx, flatten } from "./fake-react.mjs";
 
 function makeDom(viewportHeight = 900, viewportWidth = 1400) {
@@ -53,6 +54,11 @@ function makeConfigClient() {
     calls,
     getState: () => state,
     onStateChange: (l) => (listeners.add(l), () => listeners.delete(l)),
+    // Placement preference: the switcher row reads it through getState().
+    setEntryPlacement: (value) => {
+      state = { ...state, ui: { ...(state.ui ?? {}), entryPlacement: value } };
+      emit();
+    },
     effectiveOverrides: () => ({}),
     preview: () => { previews.set("meirenzhi panelOpacity", 66); state = { ...state, dirtyCount: previews.size }; emit(); },
     previewReset: () => {},
@@ -84,12 +90,20 @@ function makeHarness(viewportHeight = 900, viewportWidth = 1400, workspacesEntri
     ],
   };
   const themeSnapshot = { preference: "system", active: { id: "light" }, themes: [], revision: 0 };
+  // Slot registrations keyed by slot name: the plugin registers BOTH the
+  // sidebar footer row and the Settings → Skins section, so "the last one"
+  // is no longer "the switcher".
+  const registeredBySlot = new Map();
   let registered = null;
   const ctx = {
     effect: (fn) => { fn(); return () => {}; },
     slots: {
       inject: (key, callback) => callback() ?? (() => {}),
-      register: (opts, comp) => { registered = { opts, comp }; return () => {}; },
+      register: (opts, comp) => {
+        registered = { opts, comp };
+        registeredBySlot.set(opts.name, { opts, comp });
+        return () => {};
+      },
       entries: (key) => (key === "sidebar.workspaces" ? workspacesEntries : []),
     },
     locale: {
@@ -114,8 +128,14 @@ function makeHarness(viewportHeight = 900, viewportWidth = 1400, workspacesEntri
     configClient,
     skinsById: () => ({}),
   });
-  const SidebarAction = registered.comp;
-  const seesShellTakeover = () => SidebarAction({ wide: true, t: null }) === null; // gatekeeper yields the whole row under a takeover shell
+  const SidebarAction = registeredBySlot.get("sidebar.footer.action").comp;
+  // The gatekeeper now subscribes to the config mirror, so it must be
+  // rendered through the fake React (hooks need a frame) — rendering is what
+  // also makes the placement preference observable here.
+  const seesShellTakeover = () => {
+    render();
+    return tree === null;
+  };
 
   let tree = null;
   const attachFocusRecorders = () => {
@@ -172,7 +192,7 @@ function makeHarness(viewportHeight = 900, viewportWidth = 1400, workspacesEntri
     attachFocusRecorders();
   };
 
-  return { dom, configClient, tree: () => tree, render, shell, gearButton, cardButton, switcherButton, panelColumn, collapseButton, translucencyInput, heading, openShell, attachFocusRecorders, getActive: () => active, seesShellTakeover,
+  return { dom, configClient, registeredBySlot, tree: () => tree, render, shell, gearButton, cardButton, switcherButton, panelColumn, collapseButton, translucencyInput, heading, openShell, attachFocusRecorders, getActive: () => active, seesShellTakeover,
     cssText: () => dom.created.map((el) => el.textContent ?? "").join("\n") };
 }
 
@@ -368,8 +388,15 @@ test("⑩ shell is clamped to the space above its anchor; panel column scrolls; 
   assert.ok(css.indexOf(".dsh-skins-wide .dsh-skins-pz-panel{overflow-y:auto")
     < css.indexOf(".dsh-skins-sweeping .dsh-skins-pz-panel{overflow-y:hidden}"),
     "级联契约：sweep 裁剪必须晚于宽壳滚动规则");
-  assert.ok(css.endsWith(PANEL_CSS),
-    "组合契约：单标签以 [SHELL, PANEL] 收尾");
+  assert.ok(css.includes(PANEL_CSS),
+    "组合契约：面板模块的样式逐字节嵌在单标签里");
+  // The settings page owns its own block and is appended last, so the
+  // [SHELL, PANEL] cascade pairs above can never be split by it.
+  assert.ok(css.endsWith(SETTINGS_CSS), "组合契约：单标签以 [SHELL, PANEL, SETTINGS] 收尾");
+  assert.ok(css.indexOf(PANEL_CSS) < css.indexOf(SETTINGS_CSS),
+    "设置页规则在面板之后，不会插进 [SHELL, PANEL] 的等特异性配对");
+  assert.ok(!SETTINGS_CSS.includes(".dsh-skins-pz-"),
+    "设置页只拥有 .dsh-skins-set-* 自己的类，不重定义面板接口");
   assert.ok(css.includes("min-width:0;width:min(360px,100%);flex:none"),
     "list column stays exactly 360px wherever the 390px shell fits, and shrinks only below a 414px viewport " +
     "(a fixed 360px column overflowed narrower pops and clipped the gear column)");
@@ -562,3 +589,50 @@ test("⑭ shell takeover sentinel: a negative-priority sidebar.workspaces occupa
   const hEmpty = makeHarness(900, 1400, []);
   assert.equal(hEmpty.seesShellTakeover(), false, "empty ledger (stub contexts) → the row stays");
 });
+
+test("⑮ entry placement: the sidebar row yields when the preference moves it into Settings", async () => {
+  const h = makeHarness();
+  // Factory snapshot (no ui yet) keeps the row — an unknown/absent preference
+  // must never silently hide the entry.
+  assert.notEqual(h.tree(), null, "absent preference → the row still renders");
+
+  h.configClient.setEntryPlacement("sidebar");
+  h.render();
+  assert.notEqual(h.tree(), null, "explicit sidebar placement → the row renders");
+
+  h.configClient.setEntryPlacement("settings");
+  h.render();
+  assert.equal(h.tree(), null, "settings placement → the whole row yields");
+  assert.equal(h.seesShellTakeover(), true, "the gatekeeper is the single place that decides");
+});
+
+test("⑯ entry placement: the row returns when the preference flips back", async () => {
+  const h = makeHarness();
+  h.configClient.setEntryPlacement("settings");
+  h.render();
+  assert.equal(h.tree(), null, "hidden");
+
+  h.configClient.setEntryPlacement("sidebar");
+  h.render();
+  assert.notEqual(h.tree(), null, "shown again without a reload");
+  assert.notEqual(h.switcherButton(), undefined, "the trigger is back");
+});
+
+test("⑰ the row follows a placement change from the config mirror, not just the next render", async () => {
+  // The settings page writes through the same mirror: without a
+  // subscription the sidebar would keep its last render — the toggle would
+  // look dead until reload.
+  const h = makeHarness();
+  assert.notEqual(h.tree(), null, "starts visible");
+
+  h.configClient.setEntryPlacement("settings");
+  await tick(); // the mirror emits → the gatekeeper's own state update → rerender
+  await tick();
+  assert.equal(h.tree(), null, "the emit alone hides the row");
+
+  h.configClient.setEntryPlacement("sidebar");
+  await tick();
+  await tick();
+  assert.notEqual(h.tree(), null, "and brings it back without a reload");
+});
+

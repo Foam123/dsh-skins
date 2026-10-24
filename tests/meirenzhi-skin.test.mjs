@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createMeirenzhiSkin } from "../src/client/skins/meirenzhi/index.js";
 import { getSkinSchema } from "../src/shared/personalization/catalog.js";
+import { BUBBLE_HOOKS } from "../src/client/skins/decoration.js";
 
 const skin = createMeirenzhiSkin({ jsx: (component, props) => ({ component, props }) });
 const WALLPAPER_URL = "data:image/webp;base64,AAAA";
@@ -53,8 +54,9 @@ test("brand contract: bundled mark, gradient name and badge inversion are pinned
   assert.ok(css.includes("#root::before") && css.includes("#root::after"));
   // 泡泡边框（openbmc 同款）：明暗各一套品牌色描边 + 轻投影，框出用户输入区。
   // 挂接为 :is() 并集（ADR-0006），金值随 1.0.3 换锚更新。
-  assert.ok(css.includes('body[data-dsh-meirenzhi-skin] :is([class*="Sixlwa_bubble"], [class*="userStack"] > [class*="_bubble"]){border:1px solid rgba(184, 67, 63, 0.38);box-shadow:0 1px 4px rgba(184, 67, 63, 0.10)}'));
-  assert.ok(css.includes('body[data-dsh-meirenzhi-skin][data-ds-dark-theme] :is([class*="Sixlwa_bubble"], [class*="userStack"] > [class*="_bubble"]){border-color:rgba(229, 138, 128, 0.38);box-shadow:0 1px 6px rgba(229, 138, 128, 0.10)}'));
+  // Hash read from the single pin (BUBBLE_HOOKS), so a runtime bump moves it once.
+  assert.ok(css.includes(`body[data-dsh-meirenzhi-skin] :is([class*="${BUBBLE_HOOKS.chat.exact}"], [class*="userStack"] > [class*="_bubble"]){border:1px solid rgba(184, 67, 63, 0.38);box-shadow:0 1px 4px rgba(184, 67, 63, 0.10)}`));
+  assert.ok(css.includes(`body[data-dsh-meirenzhi-skin][data-ds-dark-theme] :is([class*="${BUBBLE_HOOKS.chat.exact}"], [class*="userStack"] > [class*="_bubble"]){border-color:rgba(229, 138, 128, 0.38);box-shadow:0 1px 6px rgba(229, 138, 128, 0.10)}`));
 });
 
 test("project at factory P=35: riding alphas, constants, scrim and factory-crisp blur", () => {

@@ -47,6 +47,7 @@ import {
   ASSET_ID_PREFIX,
   CONFIG_VERSION,
   defaultsFor,
+  defaultUiPreferences,
   GIF_MAX_PIXELS,
   GLOBAL_MAX_BYTES,
   GLOBAL_MAX_PIXELS,
@@ -56,7 +57,9 @@ import {
   listAssetFields,
   metaSatisfiesField,
   resolveImageRef,
+  UI_PREFERENCES,
   validateOverride,
+  validateUiPreference,
 } from "../../shared/personalization/catalog.js";
 
 const STATE_FILE = "state.json";
@@ -103,6 +106,14 @@ function isValidStateShape(state) {
   if (!Number.isInteger(state.revision) || state.revision < 0) return false;
   if (typeof state.skins !== "object" || state.skins === null || Array.isArray(state.skins)) return false;
   if (typeof state.library !== "object" || state.library === null || Array.isArray(state.library)) return false;
+  // Plugin-wide UI preferences (schema-owned, see UI_PREFERENCES). Absent in
+  // states written before the field existed — treated as "no override".
+  //
+  // A malformed `ui` is deliberately NOT a shape violation: it is one
+  // presentation preference, and sending the whole state into recovery over
+  // it would quarantine a perfectly good skin config. Load normalization
+  // drops the bad section and keeps everything else (see normalizeState).
+  
   // Crash-safe recovery marker (two-phase recovery): present between the
   // rebuilt-state commit and the quarantine move (see finishRecoveryCleanup).
   if (state.recoveryCleanup !== undefined) {
@@ -149,7 +160,7 @@ function isValidStateDeep(state) {
 }
 
 function emptyState() {
-  return { configVersion: CONFIG_VERSION, revision: 0, skins: {}, library: {} };
+  return { configVersion: CONFIG_VERSION, revision: 0, skins: {}, library: {}, ui: {} };
 }
 
 export function createPersonalizationStore(options = {}) {
@@ -330,6 +341,29 @@ export function createPersonalizationStore(options = {}) {
   function normalizeState() {
     const provider = metaProviderFactory(state.library);
     let removed = false;
+    // UI preferences: same closed-shape doctrine as skin sections — an
+    // unknown key or a value the current schema rejects is dropped (a value
+    // equal to the default is dropped too; it carries no information).
+    if (state.ui !== undefined) {
+      if (state.ui === null || typeof state.ui !== "object" || Array.isArray(state.ui)) {
+        delete state.ui;
+        removed = true;
+      } else {
+        const uiDefaults = defaultUiPreferences();
+        for (const key of Object.keys(state.ui)) {
+          const verdict = validateUiPreference(key, state.ui[key]);
+          const isDefault = verdict.ok && state.ui[key] === uiDefaults[key];
+          if (!verdict.ok || isDefault) {
+            delete state.ui[key];
+            removed = true;
+          }
+        }
+        // An already-empty object is the normal resting shape (emptyState
+        // seeds one); dropping it is lossless and must NOT count as a
+        // normalization change, or every boot would bump the revision.
+        if (Object.keys(state.ui).length === 0) delete state.ui;
+      }
+    }
     for (const skinId of Object.keys(state.skins)) {
       if (getSkinSchema(skinId) === null) {
         delete state.skins[skinId]; // orphan section of an unregistered skin
@@ -421,6 +455,14 @@ export function createPersonalizationStore(options = {}) {
       revision: state.revision,
       skins,
       library: Object.values(library),
+      // Plugin-wide UI preferences with schema defaults applied: the client
+      // never has to know a default, and an absent key always means "factory".
+      // A future-version state may carry an arbitrary shape here (read-only
+      // branch) — only a plain object may merge over the defaults.
+      ui: {
+        ...defaultUiPreferences(),
+        ...(state.ui !== null && typeof state.ui === "object" && !Array.isArray(state.ui) ? state.ui : {}),
+      },
       mode,
       quota: {
         count: Object.keys(library).length,
@@ -484,6 +526,13 @@ export function createPersonalizationStore(options = {}) {
           if (getField(skinId, key) === null) {
             issues.push({ opIndex: index, skinId, key, code: "UNKNOWN_FIELD" });
           }
+        } else if (op === "setUi" || op === "deleteUi") {
+          // Plugin-wide UI preferences ride the same dialect under their own
+          // op names (no skinId: they are not skin-scoped).
+          const uiKey = operation.key;
+          if (!Object.values(UI_PREFERENCES).some((entry) => entry.key === uiKey)) {
+            issues.push({ opIndex: index, key: uiKey, code: "UNKNOWN_FIELD" });
+          }
         } else if (op === "deleteAsset") {
           const assetId = operation.assetId;
           if (typeof assetId !== "string" || !ASSET_ID_PATTERN.test(assetId)) {
@@ -502,6 +551,11 @@ export function createPersonalizationStore(options = {}) {
       const provider = metaProviderFactory(draft.library);
       for (let index = 0; index < operations.length; index += 1) {
         const operation = operations[index];
+        if (operation?.op === "setUi") {
+          const verdict = validateUiPreference(operation.key, operation.value);
+          if (!verdict.ok) issues.push({ opIndex: index, key: operation.key, code: verdict.code });
+          continue;
+        }
         if (operation?.op !== "set") continue;
         const verdict = validateOverride(operation.skinId, operation.key, operation.value, provider);
         if (!verdict.ok) {
@@ -520,10 +574,25 @@ export function createPersonalizationStore(options = {}) {
       const affectedSkins = [];
       const removedAssets = [];
       let galleryOps = false;
-      const hasFieldOps = operations.some((operation) => operation?.op === "set" || operation?.op === "delete");
+      const FIELD_OPS = new Set(["set", "delete", "setUi", "deleteUi"]);
+      const hasFieldOps = operations.some((operation) => FIELD_OPS.has(operation?.op));
+      const hasUiOps = operations.some((operation) => operation?.op === "setUi" || operation?.op === "deleteUi");
       for (const operation of operations) {
         const { op, skinId, key } = operation;
-        if (op === "set" || op === "delete") {
+        if (op === "setUi" || op === "deleteUi") {
+          const uiDefaults = defaultUiPreferences();
+          // A value equal to the schema default is not an override (same
+          // ruling as skin fields): it must not persist, so resetting the
+          // toggle leaves a state as clean as a fresh install.
+          if (op === "setUi" && operation.value !== uiDefaults[key]) {
+            draft.ui = { ...(draft.ui ?? {}), [key]: operation.value };
+          } else if (draft.ui !== undefined) {
+            const next = { ...draft.ui };
+            delete next[key];
+            if (Object.keys(next).length === 0) delete draft.ui;
+            else draft.ui = next;
+          }
+        } else if (op === "set" || op === "delete") {
           draft.skins[skinId] = draft.skins[skinId] ?? {};
           if (op === "set") draft.skins[skinId][key] = operation.value;
           else delete draft.skins[skinId][key];
@@ -572,6 +641,9 @@ export function createPersonalizationStore(options = {}) {
       gcNow();
       const result = { revision: draft.revision };
       if (galleryOps) result.affectedSkins = affectedSkins;
+      // UI-only batches answer with the effective map so a caller never has
+      // to refetch just to learn what the write landed on.
+      if (hasUiOps) result.ui = { ...defaultUiPreferences(), ...(draft.ui ?? {}) };
       return result;
     });
   }

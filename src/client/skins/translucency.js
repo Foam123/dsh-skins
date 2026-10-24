@@ -24,6 +24,12 @@ export function glassRule(bodyAttribute, glassVar) {
   return `body[data-${attr}] [id="root"]{backdrop-filter:blur(var(${glassVar},0px))}`;
 }
 
+/** Append the #root glass rule only while the wallpaper blur is non-zero. */
+function withGlass(table, baseCss, blurPx) {
+  if (blurPx <= 0) return baseCss;
+  return baseCss + "\n" + glassRule(table.bodyAttribute, table.glassVar);
+}
+
 /**
  * 以皮肤声明表产出完整投影函数 project(values, assets) → SkinEffects 草稿
  * （形状经 projector.js 的 normalizeEffects 校验冻结）。表形状见
@@ -34,6 +40,10 @@ export function createProjection(table) {
 
   return function project(values, assets) {
     const P = values.panelOpacity;
+    // Overlay frost density (percent): the floating-layer family reads it, so
+    // a skin that declares `buildStaticCss` rebuilds its template per call.
+    // Skins that do not declare it keep the pre-knob literal (no-op).
+    const frost = typeof values.frost === "number" ? values.frost : 86;
     const pct = (points) => (points / 100).toFixed(2);
     const pt = (baked) => Math.min(100, Math.max(0, P + baked - anchor));
     const alpha = (rgb, baked) => `rgba(${rgb}, ${pct(pt(baked))})`;
@@ -86,15 +96,40 @@ export function createProjection(table) {
       ? { light: boosted, dark: blurPx }
       : { light: boosted, dark: boosted };
 
+    // Frost drives a DEDICATED token, never the riding pair: openbmc/uefi
+    // already ship --dsw-alias-bg-layer-2 as a translucency-riding token whose
+    // values are pinned by the golden-table contract, and overwriting it would
+    // silently couple two independent knobs. The frost surface is exposed as
+    // its own variable that the frost CSS rules consume.
+    if (table.frostSurface !== null && table.frostSurface !== undefined) {
+      const surface = table.frostSurface;
+      const frostPct = `${Math.round(frost)}%`;
+      tokenOverrides["--dsh-skins-frost-surface"] = {
+        light: `color-mix(in srgb, rgb(${surface.light}) ${frostPct}, transparent)`,
+        dark: `color-mix(in srgb, rgb(${surface.dark}) ${frostPct}, transparent)`,
+      };
+    }
+
+    // Brand text: the user override wins when the catalog field carries one,
+    // otherwise the skin's declared title. The '/' separator is runtime-owned
+    // and never part of this value.
+    const brand = typeof values.titleBrand === "string" && values.titleBrand.trim() !== ""
+      ? values.titleBrand.trim()
+      : table.titleBrand;
+
     return {
       bodyAttribute: table.bodyAttribute,
       slogans: values.slogan,
-      titleBrand: table.titleBrand,
+      titleBrand: brand,
       favicon: table.favicon,
       backdrop: { imageLight, imageDark, overlayLight, overlayDark, blur: blurPx, desktopBlur: desktopBlurPair },
       tokenOverrides,
       cssVariables: blurPx > 0 ? { [glassVar]: { light: `${blurPx}px`, dark: `${blurPx}px` } } : null,
-      staticCss: blurPx > 0 ? table.staticCss + "\n" + glassRule(table.bodyAttribute, glassVar) : table.staticCss,
+      staticCss: withGlass(
+        table,
+        table.buildStaticCss ? table.buildStaticCss(frost) : table.staticCss,
+        blurPx,
+      ),
       decorations: null,
     };
   };

@@ -55,7 +55,7 @@ export function createConfigClient(options = {}) {
   if (typeof fetchImpl !== "function") throw new Error("config client requires a fetch implementation");
 
   let status = "loading";
-  let snapshot = { skins: {}, library: [], references: {}, revision: 0, mode: "normal" };
+  let snapshot = { skins: {}, library: [], references: {}, revision: 0, mode: "normal", ui: {} };
   const previews = new Map(); // `${skinId} ${key}` → value (dirty, unsaved)
   const listeners = new Set();
   let fetchGeneration = 0;
@@ -103,6 +103,10 @@ export function createConfigClient(options = {}) {
       skins: cloneSkins(snapshot.skins),
       library: snapshot.library,
       references: snapshot.references ?? {},
+      // Plugin-wide UI preferences as the Host resolves them (defaults
+      // applied) — the switcher shell reads `ui.entryPlacement` to decide
+      // whether it renders into the sidebar foot at all.
+      ui: { ...(snapshot.ui ?? {}) },
       recovery: snapshot.recovery,
       quota: snapshot.quota,
       notices: structuredClone(notices),
@@ -404,6 +408,65 @@ export function createConfigClient(options = {}) {
     emit();
   }
 
+  /**
+   * Persist one plugin-wide UI preference (not a skin field, so no preview
+   * layer: it has no visual effect until the shell re-reads it, and the
+   * shell is the only consumer). Serialized on the same write chain as field
+   * flushes and gallery ops so the baseRevision precondition stays coherent.
+   */
+  function setUiPreference(key, value) {
+    writeChain = writeChain.then(async () => {
+      if (disposed) return { error: "disposed" };
+      const blocked = writeGate();
+      if (blocked !== null) return { error: blocked };
+      const operation = value === undefined || value === null
+        ? { op: "deleteUi", key }
+        : { op: "setUi", key, value };
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let response;
+        try {
+          response = await request("/config", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ baseRevision: snapshot.revision, operations: [operation] }),
+          });
+        } catch {
+          return { error: "OFFLINE" };
+        }
+        if (disposed) return { error: "disposed" };
+        if (response.status === 409) {
+          const conflictBody = await response.json().catch(() => null);
+          if (conflictBody?.code === "STORE_READONLY") {
+            setStatus("unsupported-readonly");
+            return { error: "conflict" };
+          }
+          await refetch();
+          if (attempt === 1) {
+            setFlushFailure(null, null);
+            emit();
+            return { error: "REVISION_CONFLICT" };
+          }
+          continue;
+        }
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          return { error: body?.code ?? `HTTP ${response.status}` };
+        }
+        const body = await response.json().catch(() => null);
+        // The Host answers a UI-only batch with the effective map; applying
+        // it locally avoids a second round trip and keeps other tabs in step
+        // through the usual announce() ping.
+        snapshot = { ...snapshot, revision: body?.revision ?? snapshot.revision, ui: body?.ui ?? snapshot.ui };
+        setFlushFailure(null, null);
+        emit();
+        announce();
+        return { ui: snapshot.ui };
+      }
+      return { error: "REVISION_CONFLICT" };
+    });
+    return writeChain;
+  }
+
   /** Record an unsaved reset-to-default (a delete op) for the field. */
   function previewReset(skinId, key) {
     previews.set(`${skinId} ${key}`, null);
@@ -672,6 +735,7 @@ export function createConfigClient(options = {}) {
     flushNow,
     preview,
     previewReset,
+    setUiPreference,
     effectiveOverrides,
     uploadImage,
     deleteImage,

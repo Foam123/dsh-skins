@@ -21,8 +21,12 @@
 
 /** 气泡钩子唯一事实对象：哈希漂移重推导（bump runtime-pin 后）只改这里。 */
 export const BUBBLE_HOOKS = {
-  chat: { exact: "Sixlwa_bubble", container: "userStack" },
-  goal: { exact: "oRe1gG_bubble", container: "_stack" },
+  // 0.2.1-rc.3 re-derivation (2026-10-24): the desktop build's css-modules
+  // local hashes moved to a hyphenated alphabet (`LOmM4q`, `rhSLKq`) and both
+  // pinned hashes drifted. The structural branch kept the outline alive the
+  // whole time, but the exact branch was dead weight until this bump.
+  chat: { exact: "LOmM4q_bubble", container: "userStack" },
+  goal: { exact: "rhSLKq_bubble", container: "_stack" },
   bubbleLocal: "_bubble",
 };
 
