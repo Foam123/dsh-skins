@@ -327,6 +327,23 @@ export function createSkinRuntime({ profile = "web" } = {}) {
    * unwinds itself completely and the previously mounted skin keeps running.
    * Returns the unwind function; throws only after self-cleanup.
    */
+  /**
+   * Bind the skin's Name component to the projected brand text.
+   *
+   * Skins declare `Name` as a zero-argument component (the brand mark is
+   * static furniture), but the brand TEXT is personalizable since 1.6.0. The
+   * factory therefore renders the name it knows, and the runtime supplies the
+   * live one through props: `Name({ brand })`. A skin that ignores the prop
+   * keeps its factory name — that is the pre-0.2.1-rc.3 behaviour, still
+   * correct for anyone who never touches the field.
+   */
+  function makeBrandName(skin, effects) {
+    const brand = effects.titleBrand === null || effects.titleBrand === "" ? null : effects.titleBrand;
+    if (brand === null) return skin.Name;
+    const BoundName = (props) => skin.Name({ ...(props ?? {}), brand });
+    return BoundName;
+  }
+
   function buildEffects(skin, effects) {
     if (!ctx) throw new Error("[dsh-skins] mount before apply");
     const body = document.body;
@@ -344,9 +361,14 @@ export function createSkinRuntime({ profile = "web" } = {}) {
       stops.push(ctx.slots.inject("sidebar.brand.mark", () =>
         ctx.slots.inject("sidebar.brand.name", () =>
           ctx.slots.inject("conversation.hero.brand.mark", () => {
+            // The brand name is the ONE skin field that can change without a
+            // remount (titleBrand rides project()), so the seat gets a
+            // component bound to the freshly projected value rather than the
+            // factory's static one. Everything else (Mark) stays static.
+            const brandName = makeBrandName(skin, effects);
             const registrations = [
               registerBrandSeat("sidebar.brand.mark", skin.Mark),
-              registerBrandSeat("sidebar.brand.name", skin.Name),
+              registerBrandSeat("sidebar.brand.name", brandName),
               registerBrandSeat("conversation.hero.brand.mark", skin.Mark),
             ];
             return () => {

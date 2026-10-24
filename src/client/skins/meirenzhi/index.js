@@ -148,9 +148,10 @@ export function createMeirenzhiSkin(jsxRuntime) {
     });
   }
 
-  function MeiRenZhiName() {
-    // 「凡人修仙传」鎏金→绯红渐变裁字（原始方案；行楷字体栈与手绘 SVG 字形
-    // 两版均被产品主人否决——观感不足/不可读，2026-09-01 回归此方案）+
+  function MeiRenZhiName({ brand } = {}) {
+    // 品牌名默认「凡人修仙传」（鎏金→绯红渐变裁字，原始方案；行楷字体栈与
+    // 手绘 SVG 字形两版均被产品主人否决——观感不足/不可读，2026-09-01 回归
+    // 此方案）；runtime 经 props.brand 传入个性化值（v1.7.0 起品牌名可改）+
     // 反色徽章 BEAUTY（tgcf badge 同构，亮暗反转由 CSS 的 .dsh-mrz-badge
     // 规则承担）。
     return jsx("span", {
@@ -170,7 +171,7 @@ export function createMeirenzhiSkin(jsxRuntime) {
             backgroundClip: "text",
             color: "transparent",
           },
-          children: "凡人修仙传",
+          children: brand || "凡人修仙传",
         }),
         jsx("span", { className: "dsh-mrz-badge", children: "BEAUTY" }),
       ],

@@ -36,7 +36,16 @@ export function createUefiHarness({ jsx }) {
     });
   }
 
-  function UefiName() {
+  function UefiName({ brand } = {}) {
+    // A custom brand replaces the wordmark outright: keeping "STUDIO" glued
+    // to a user-supplied name would read as a product claim the user did not
+    // make. Without one, the factory wordmark is untouched.
+    if (brand && brand !== "UEFI Studio") {
+      return jsx("span", {
+        style: { display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 650, letterSpacing: ".02em", whiteSpace: "nowrap" },
+        children: brand,
+      });
+    }
     return jsx("span", {
       style: { display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 650, letterSpacing: ".02em", whiteSpace: "nowrap" },
       children: [

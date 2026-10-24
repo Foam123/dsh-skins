@@ -17,6 +17,67 @@ test("titleBrand: override reaches the tab title, empty falls back to the skin t
   assert.equal(skin.project(base, assets).titleBrand, "美人志", "absent → skin title");
 });
 
+test("titleBrand: the sidebar Name component renders the custom brand", () => {
+  // The regression this guards: the field persisted correctly but the sidebar
+  // kept showing the hardcoded factory name, because Name() ignored props.
+  const skin = createMeirenzhiSkin(stubJsx);
+  const text = (node) => {
+    if (node === null || node === undefined) return "";
+    if (typeof node === "string" || typeof node === "number") return String(node);
+    if (Array.isArray(node)) return node.map(text).join("");
+    // The stub renders { t, p } (no props wrapper); real React elements carry
+    // props. Accept both so the assertion tests the COMPONENT, not the stub.
+    const children = node.props?.children ?? node.p?.children;
+    return children === undefined ? "" : text(children);
+  };
+  const custom = text(skin.Name({ brand: "Alex" }));
+  assert.ok(custom.includes("Alex"), "custom brand reaches the DOM");
+  assert.ok(!custom.includes("凡人修仙传"), "the factory name is replaced, not appended");
+
+  assert.ok(text(skin.Name({})).includes("凡人修仙传"), "no prop → factory name");
+  assert.ok(text(skin.Name({ brand: "" })).includes("凡人修仙传"), "empty string → factory name");
+});
+
+test("titleBrand: openbmc/uefi swap their wordmark for a custom name", () => {
+  const text = (node) => {
+    if (node === null || node === undefined) return "";
+    if (typeof node === "string" || typeof node === "number") return String(node);
+    if (Array.isArray(node)) return node.map(text).join("");
+    const children = node.props?.children ?? node.p?.children;
+    return children === undefined ? "" : text(children);
+  };
+  // openbmc's wordmark is SVG artwork with no text in it, so the "keeps its
+  // wordmark" assertion is structural (an <svg> child is still present) rather
+  // than textual. uefi spells its name in text.
+  const hasSvg = (node) => {
+    if (node === null || node === undefined || typeof node !== "object") return false;
+    if (Array.isArray(node)) return node.some(hasSvg);
+    if (node.t === "svg") return true; // stub shape
+    if (node.props?.children !== undefined) return hasSvg(node.props.children);
+    return node.p?.children !== undefined ? hasSvg(node.p.children) : false;
+  };
+
+  for (const [factory, factoryName, factoryLabel] of [
+    [createOpenBmcHarness, "OpenBMC Studio", "OpenBMC"],
+    [createUefiHarness, "UEFI Studio", "UEFI"],
+  ]) {
+    const skin = factory(stubJsx);
+    const isUefi = skin.id === "uefi-harness";
+
+    // No prop (or the factory's own name) keeps the branded wordmark.
+    assert.ok(isUefi
+      ? text(skin.Name({})).includes(factoryLabel)
+      : hasSvg(skin.Name({})), `${skin.id}: factory wordmark kept without a prop`);
+
+    // A custom name replaces it — two brands never share one seat.
+    const custom = text(skin.Name({ brand: "Alex" }));
+    assert.ok(custom.includes("Alex"), `${skin.id}: custom name rendered`);
+    assert.ok(!custom.includes(factoryLabel) || isUefi === false, `${skin.id}: wordmark replaced`);
+    if (!isUefi) assert.ok(!hasSvg(skin.Name({ brand: "Alex" })), `${skin.id}: SVG wordmark dropped`);
+    assert.ok(!text(skin.Name({ brand: factoryName })).includes("Alex"), `${skin.id}: factory name keeps wordmark`);
+  }
+});
+
 test("titleBrand: never carries the runtime-owned separator", () => {
   const skin = createMeirenzhiSkin(stubJsx);
   const brand = skin.project({ ...base, titleBrand: "凡人修仙传" }, assets).titleBrand;

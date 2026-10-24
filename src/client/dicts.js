@@ -28,6 +28,8 @@ export const DICTS = {
     // Personalization surface (1.0.0)
     "personalization.title": "个性化",
     "personalization.collapse": "收起个性化面板",
+    "personalization.saving": "正在保存…",
+    "personalization.saved": "已保存",
     "personalization.reset": "恢复默认",
     "personalization.confirmTitle": "确认操作",
     "personalization.confirm": "确认",
@@ -115,6 +117,8 @@ export const DICTS = {
     // Personalization surface (1.0.0)
     "personalization.title": "Personalize",
     "personalization.collapse": "Collapse personalization panel",
+    "personalization.saving": "Saving…",
+    "personalization.saved": "Saved",
     "personalization.reset": "Restore defaults",
     "personalization.confirmTitle": "Confirm action",
     "personalization.confirm": "Confirm",

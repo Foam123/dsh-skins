@@ -65,6 +65,10 @@ export function createConfigClient(options = {}) {
   // (a conflict replaces the error); error and reverted legally coexist — a
   // partial-dangling batch excises AND names the survivor's failure.
   let notices = [];
+  // Monotonic counter bumped on every COMMITTED write. The panel watches it to
+  // say "已保存" — the auto-save debounce is deliberately invisible otherwise,
+  // which reads as "my edit did nothing".
+  let saveTick = 0;
   let channel = null;
 
   /** Replace the conflict/error notices (the kind-exclusive pair); the
@@ -111,6 +115,7 @@ export function createConfigClient(options = {}) {
       quota: snapshot.quota,
       notices: structuredClone(notices),
       dirtyCount: previews.size,
+      saveTick,
     };
   }
 
@@ -347,6 +352,7 @@ export function createConfigClient(options = {}) {
           }
           setFlushFailure(null, null);
           notices = []; // a healthy flush retires every notice (conflict, error, reverted)
+          saveTick += 1;
           // Resync from the Host rather than trusting a racing local snapshot:
           // a refetch issued mid-flight may otherwise resurrect pre-write state.
           await refetch();
@@ -458,6 +464,7 @@ export function createConfigClient(options = {}) {
         // through the usual announce() ping.
         snapshot = { ...snapshot, revision: body?.revision ?? snapshot.revision, ui: body?.ui ?? snapshot.ui };
         setFlushFailure(null, null);
+        saveTick += 1;
         emit();
         announce();
         return { ui: snapshot.ui };

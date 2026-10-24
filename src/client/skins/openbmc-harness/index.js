@@ -87,7 +87,16 @@ export function createOpenBmcHarness(jsxRuntime) {
    * 随主题 token 自适应），"STUDIO" 徽章为 HTML 反色片（.dsh-openbmc-badge，
    * 皮肤 CSS 提供明暗两套显式颜色），品牌更名后不再逐字节复刻官方
    * BrandWordmark 字形。 */
-  function OpenBmcName() {
+  function OpenBmcName({ brand } = {}) {
+    // A custom brand replaces the OpenBMC logotype: the SVG is a fixed piece
+    // of brand artwork and cannot be re-lettered, so showing it next to a
+    // user-supplied name would present two competing brands in one seat.
+    if (brand && brand !== "OpenBMC Studio") {
+      return jsx("span", {
+        style: { display: "inline-flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" },
+        children: brand,
+      });
+    }
     return jsx("span", {
       style: { display: "inline-flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" },
       "aria-hidden": "true",

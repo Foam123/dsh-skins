@@ -785,11 +785,11 @@ test("meirenzhi panel renders one wallpaper thumb per catalog builtinChoices (6)
 });
 
 test("PANEL_CSS owns the panel visual interface", () => {
-  // Ownership partition ratchet (45 shell + 59 panel = 104):
+  // Ownership partition ratchet (45 shell + 60 panel = 105):
   // a rule silently moving back to the shell changes this count even when
   // the final injected CSS stays byte-identical.
-  assert.equal(PANEL_CSS.split("\n").length, 59,
-    "PANEL_CSS freezes at 59 rules — including confirmation tag styles");
+  assert.equal(PANEL_CSS.split("\n").length, 60,
+    "PANEL_CSS freezes at 60 rules — including the save-state indicator");
   assert.ok(PANEL_CSS.includes(".dsh-skins-pz-dialog::backdrop"), "modal backdrop belongs to the panel");
   assert.ok(PANEL_CSS.includes(".dsh-skins-pz-dialog-tags{display:flex;flex-wrap:wrap"), "tags wrap on narrow windows");
   assert.ok(PANEL_CSS.includes(".dsh-skins-pz-dialog-tag::before"), "a dot distinguishes each item beyond color alone");

@@ -53,6 +53,7 @@ export const PANEL_CSS = [
   '.dsh-skins-pz-collapse svg{width:14px;height:14px}',
   '.dsh-skins-pz{display:flex;flex-direction:column;gap:10px}',
   '.dsh-skins-pz-head{display:flex;align-items:center;gap:8px}',
+  '.dsh-skins-pz-savestate{flex:none;margin-left:auto;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;white-space:nowrap}',
   // Title does NOT grow (flex:0 1 auto): the reset control must sit right
   // after the title text on the header's LEFT side (v1.0.0 ruling) — a
   // growing title would push it to the right end, adjacent to the collapse
@@ -448,6 +449,19 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
     const dialogRef = useRef(null);
     const confirmationRef = useRef(null);
     const [confirmation, setConfirmation] = useState(null);
+    // Auto-save is deliberately silent, which reads as "nothing happened".
+    // Surface it: while a debounce/write is in flight show 正在保存…, and for a
+    // short beat after a commit show 已保存 (the tick changes on every write).
+    const [savedFlash, setSavedFlash] = useState(false);
+    const saveTick = state.saveTick ?? 0;
+    const lastTickRef = useRef(saveTick);
+    useEffect(() => {
+      if (saveTick === lastTickRef.current) return undefined;
+      lastTickRef.current = saveTick;
+      setSavedFlash(true);
+      const timer = setTimeout(() => setSavedFlash(false), 1600);
+      return () => clearTimeout(timer);
+    }, [saveTick]);
     const requestConfirm = (message, accept, { detailItems = null } = {}) => {
       if (!desktopProfile) {
         if (window.confirm(message)) void accept();
@@ -587,6 +601,13 @@ export function createPersonalizationPanel({ jsx, react, configClient, tr, built
           tabIndex: -1, role: "heading", "aria-level": 2,
           children: `${tr("personalization.title")} · ${labelFor(skinId)}`,
         }),
+        (state.dirtyCount > 0 || savedFlash) ? jsx("span", {
+          key: "save-state",
+          className: "dsh-skins-pz-savestate",
+          role: "status",
+          "aria-live": "polite",
+          children: state.dirtyCount > 0 ? tr("personalization.saving") : tr("personalization.saved"),
+        }) : null,
         hasAnyOverride ? jsx("button", {
           type: "button", className: "dsh-skins-pz-btn dsh-skins-pz-danger",
           disabled: writesBlocked,

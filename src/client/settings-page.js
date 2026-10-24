@@ -116,6 +116,19 @@ export function createSkinsSettingsSection({
     const [personalizeId, setPersonalizeId] = useState(null);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState(null);
+    // Same feedback contract as the personalization panel: auto-save is
+    // silent, so a committed write flashes 已保存 instead of leaving the user
+    // wondering whether the switch did anything.
+    const [savedFlash, setSavedFlash] = useState(false);
+    const saveTick = state?.saveTick ?? 0;
+    const lastTickRef = react.useRef(saveTick);
+    useEffect(() => {
+      if (saveTick === lastTickRef.current) return undefined;
+      lastTickRef.current = saveTick;
+      setSavedFlash(true);
+      const timer = setTimeout(() => setSavedFlash(false), 1600);
+      return () => clearTimeout(timer);
+    }, [saveTick]);
 
     const placement = state?.ui?.entryPlacement ?? "sidebar";
     const writesBlocked = configClient ? !configClient.canWrite() : true;
@@ -245,6 +258,13 @@ export function createSkinsSettingsSection({
                 }),
               ],
             }),
+            (saving || savedFlash) ? jsx("div", {
+              key: "state",
+              className: "dsh-skins-set-muted",
+              role: "status",
+              "aria-live": "polite",
+              children: saving ? t("personalization.saving") : t("personalization.saved"),
+            }) : null,
             saveError === null ? null : jsx("div", { key: "err", className: "dsh-skins-set-error", children: saveError }),
           ].filter(Boolean),
         }),

@@ -98,6 +98,21 @@ export function frostFamilyCss(scope, tints, options = {}) {
     position: relative;
     z-index: 10;
   }
+  /* Full-page plugin surfaces (the plugin market page is a plain flex column
+     with NO background of its own, so the wallpaper shows straight through and
+     its lists become unreadable). It is neither a dialog nor a dockkit float,
+     so no hook above reaches it — give every top-level page container the same
+     frost treatment. Attribute substrings keep this independent of per-build
+     class hashes; the :has() anchor is the page's own header row. */
+  ${scope} [data-dsh-market-root] {
+    background: var(--dsh-skins-frost-surface, color-mix(in srgb, rgb(${frost.light}) ${density}%, transparent));
+    backdrop-filter: blur(${blurPx}px) saturate(1.3);
+    -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.3);
+    border-radius: var(--dsw-radius-lg, 12px);
+  }
+  ${scope}[data-ds-dark-theme] [data-dsh-market-root] {
+    background: var(--dsh-skins-frost-surface, color-mix(in srgb, rgb(${frost.dark}) ${density}%, transparent));
+  }
   ${scope} .lc-tip {
     background: color-mix(in srgb, rgb(${frost.light}) ${Math.min(100, density + 10)}%, transparent);
     backdrop-filter: blur(${blurPx}px) saturate(1.3);
