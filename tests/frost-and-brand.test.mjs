@@ -108,6 +108,7 @@ test("frost: full-page plugin surfaces get a surface (they ship with none)", () 
   // per-build class hashes.
   assert.ok(css.includes("[data-plugin-panel]"), "plugin manager page hook");
   assert.ok(css.includes("[data-dsh-market-root]"), "market page hook");
+  assert.ok(css.includes(".codexSubscriptionCard"), "Codex subscription config cards are frosted too");
 
   // The surface must actually be painted at the knob's density, and frosted.
   const idx = css.indexOf("[data-plugin-panel]");
