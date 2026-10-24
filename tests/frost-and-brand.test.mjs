@@ -97,6 +97,25 @@ test("frost: drives the floating-layer tint and blur", () => {
   assert.notEqual(hi, lo, "the knob changes the emitted CSS");
 });
 
+test("frost: full-page plugin surfaces get a surface (they ship with none)", () => {
+  // The plugin manager page is a bare flex column: unlike the chat surface it
+  // never painted a panel, so the wallpaper sat directly behind its lists. It
+  // is neither a dialog nor a dockkit float, so the hooks above miss it.
+  const tints = { frost: { light: "1, 2, 3", dark: "4, 5, 6" }, menu: { light: "1, 2, 3", dark: "4, 5, 6" } };
+  const css = frostFamilyCss("body[x]", tints, { frost: 91 });
+
+  // Both hooks are stable attributes shipped by the packages themselves, never
+  // per-build class hashes.
+  assert.ok(css.includes("[data-plugin-panel]"), "plugin manager page hook");
+  assert.ok(css.includes("[data-dsh-market-root]"), "market page hook");
+
+  // The surface must actually be painted at the knob's density, and frosted.
+  const idx = css.indexOf("[data-plugin-panel]");
+  const block = css.slice(idx, css.indexOf("}", idx));
+  assert.ok(block.includes("91%"), "density follows the knob");
+  assert.ok(block.includes("backdrop-filter"), "and it is frosted, not just tinted");
+});
+
 test("frost: 86% reproduces the pre-knob recipe byte for byte (no visual change on upgrade)", () => {
   const skin = createMeirenzhiSkin(stubJsx);
   const css = skin.project({ ...base, frost: 86 }, assets).staticCss;
