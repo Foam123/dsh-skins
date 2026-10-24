@@ -103,10 +103,15 @@ export function createProjection(table) {
     // its own variable that the frost CSS rules consume.
     if (table.frostSurface !== null && table.frostSurface !== undefined) {
       const surface = table.frostSurface;
-      const frostPct = `${Math.round(frost)}%`;
+      // rgba(), not color-mix(): a computed color-mix() serialises as a
+      // color() value whose channels are 0-1 floats, and plugins that sample a
+      // backdrop by reading the first three numbers of backgroundColor then
+      // paint near-black — this is what turned the Codex settings tab bar
+      // solid black under this skin.
+      const frostAlpha = (Math.round(frost) / 100).toFixed(2);
       tokenOverrides["--dsh-skins-frost-surface"] = {
-        light: `color-mix(in srgb, rgb(${surface.light}) ${frostPct}, transparent)`,
-        dark: `color-mix(in srgb, rgb(${surface.dark}) ${frostPct}, transparent)`,
+        light: `rgba(${surface.light}, ${frostAlpha})`,
+        dark: `rgba(${surface.dark}, ${frostAlpha})`,
       };
     }
 

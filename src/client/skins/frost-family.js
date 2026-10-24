@@ -20,6 +20,17 @@ export function frostFamilyCss(scope, tints, options = {}) {
   // nearly pure wallpaper and a strong blur would smear the underlying text
   // instead of hiding it; above it, blur climbs with opacity up to 22px.
   const blurPx = Math.round(14 * Math.min(1, density / 86) * (density >= 40 ? 1 : density / 40));
+  // Emit rgba(), never color-mix().
+  //
+  // color-mix() computes to a color() value whose channels are 0-1 floats, and
+  // getComputedStyle serialises it that way. Third-party plugins that sample a
+  // backdrop by reading the first three numbers of backgroundColor and
+  // formatting them as rgb(r, g, b) then paint near-black — that is exactly
+  // how the Codex subscription tab bar went solid black under this skin
+  // (its useBackdropOf reads the settings dialog's background). rgba() keeps
+  // the channels at 0-255 so any such sampler stays correct. Visually
+  // identical: mixing an opaque color with transparent at N% IS rgba(..., N/100).
+  const surface = (channels, percent) => `rgba(${channels}, ${(percent / 100).toFixed(2)})`;
   return `/* 浮层毛玻璃家族（配方与选择器并集的唯一来源；裁决与修订史见 ADR-0007，单点生成见 ADR-0012）
    * 宿主 Modal（设置页各弹窗、风险确认）、dsh-m / dsh-skins / dsh-context 等
    * 插件弹层、dockkit 悬浮窗壳与宿主对话框兜底、下拉菜单面、右栏内嵌卡与
@@ -40,13 +51,13 @@ export function frostFamilyCss(scope, tints, options = {}) {
   /* The frost surface variable is this family's single hand-off with the
      projection kernel: a skin declaring frostSurface publishes
      --dsh-skins-frost-surface, which carries the complete color. The literal
-     color-mix stays as the fallback so a skin can opt out by omitting it. */
+     rgba() stays as the fallback so a skin can opt out by omitting the token. */
   ${scope} [role="dialog"][aria-modal="true"]:not(.dsvm-lightbox),
   ${scope} .dshm-panel,
   ${scope} .dshm-compat-dialog,
   ${scope} .dshm-dshchip-tip,
   ${scope} .dsh-skins-pop {
-    background: var(--dsh-skins-frost-surface, color-mix(in srgb, rgb(${frost.light}) ${density}%, transparent));
+    background: var(--dsh-skins-frost-surface, ${surface(frost.light, density)});
     backdrop-filter: blur(${blurPx}px) saturate(1.3);
     -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.3);
   }
@@ -55,7 +66,7 @@ export function frostFamilyCss(scope, tints, options = {}) {
   ${scope}[data-ds-dark-theme] .dshm-compat-dialog,
   ${scope}[data-ds-dark-theme] .dshm-dshchip-tip,
   ${scope}[data-ds-dark-theme] .dsh-skins-pop {
-    background: color-mix(in srgb, rgb(${frost.dark}) ${density}%, transparent);
+    background: ${surface(frost.dark, density)};
   }
   ${scope} .dshm-overlay,
   ${scope} .dsvm-overlay,
@@ -69,7 +80,7 @@ export function frostFamilyCss(scope, tints, options = {}) {
   ${scope} .dsvm-filterpop,
   ${scope} .dsvm-modalbox,
   ${scope} .dsvm-chipswrap {
-    background: color-mix(in srgb, rgb(${frost.light}) ${density}%, transparent);
+    background: ${surface(frost.light, density)};
     backdrop-filter: blur(${blurPx}px) saturate(1.3);
     -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.3);
   }
@@ -78,13 +89,13 @@ export function frostFamilyCss(scope, tints, options = {}) {
   ${scope}[data-ds-dark-theme] .dsvm-filterpop,
   ${scope}[data-ds-dark-theme] .dsvm-modalbox,
   ${scope}[data-ds-dark-theme] .dsvm-chipswrap {
-    background: color-mix(in srgb, rgb(${frost.dark}) ${density}%, transparent);
+    background: ${surface(frost.dark, density)};
   }
   ${scope} .lc-ov-card,
   ${scope} .lc-modal-card,
   ${scope} .lc-card,
   ${scope} .lc-settings-card {
-    background: color-mix(in srgb, rgb(${frost.light}) ${density}%, transparent);
+    background: ${surface(frost.light, density)};
     backdrop-filter: blur(${blurPx}px) saturate(1.3);
     -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.3);
   }
@@ -92,7 +103,7 @@ export function frostFamilyCss(scope, tints, options = {}) {
   ${scope}[data-ds-dark-theme] .lc-modal-card,
   ${scope}[data-ds-dark-theme] .lc-card,
   ${scope}[data-ds-dark-theme] .lc-settings-card {
-    background: color-mix(in srgb, rgb(${frost.dark}) ${density}%, transparent);
+    background: ${surface(frost.dark, density)};
   }
   ${scope} .lc-card:has(.group\\/tip:hover) {
     position: relative;
@@ -109,31 +120,31 @@ export function frostFamilyCss(scope, tints, options = {}) {
      SAME node that carries its page class), so no class-hash guessing. */
   ${scope} [data-plugin-panel],
   ${scope} [data-dsh-market-root] {
-    background: var(--dsh-skins-frost-surface, color-mix(in srgb, rgb(${frost.light}) ${density}%, transparent));
+    background: var(--dsh-skins-frost-surface, ${surface(frost.light, density)});
     backdrop-filter: blur(${blurPx}px) saturate(1.3);
     -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.3);
   }
   ${scope}[data-ds-dark-theme] [data-plugin-panel],
   ${scope}[data-ds-dark-theme] [data-dsh-market-root] {
-    background: var(--dsh-skins-frost-surface, color-mix(in srgb, rgb(${frost.dark}) ${density}%, transparent));
+    background: var(--dsh-skins-frost-surface, ${surface(frost.dark, density)});
   }
   /* Codex subscription settings is a third-party page hosted inside the
      settings dialog. Its own cards paint bg-layer-1, which is translucent
      for skins; frost these dense config cards too so they remain readable. */
   ${scope} .codexSubscriptionCard {
-    background: var(--dsh-skins-frost-surface, color-mix(in srgb, rgb(${frost.light}) ${density}%, transparent));
+    background: var(--dsh-skins-frost-surface, ${surface(frost.light, density)});
     backdrop-filter: blur(${blurPx}px) saturate(1.3);
     -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.3);
   }
   ${scope}[data-ds-dark-theme] .codexSubscriptionCard {
-    background: var(--dsh-skins-frost-surface, color-mix(in srgb, rgb(${frost.dark}) ${density}%, transparent));
+    background: var(--dsh-skins-frost-surface, ${surface(frost.dark, density)});
   }
   ${scope} .lc-tip {
-    background: color-mix(in srgb, rgb(${frost.light}) ${Math.min(100, density + 10)}%, transparent);
+    background: ${surface(frost.light, Math.min(100, density + 10))};
     backdrop-filter: blur(${blurPx}px) saturate(1.3);
     -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.3);
   }
   ${scope}[data-ds-dark-theme] .lc-tip {
-    background: color-mix(in srgb, rgb(${frost.dark}) ${Math.min(100, density + 10)}%, transparent);
+    background: ${surface(frost.dark, Math.min(100, density + 10))};
   }`;
 }

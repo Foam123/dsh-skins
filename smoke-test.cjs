@@ -400,7 +400,10 @@ if (!obmcCss || obmcCss.removed) throw new Error("openbmc static css missing");
 // the modal frosted-glass rules (popup readability) ship unconditionally.
 if (obmcCss.textContent.includes('[id="root"]{backdrop-filter')) throw new Error("no wallpaper glass rule at the default P=55 (blur 0)");
 if (!obmcCss.textContent.includes("--dsw-mask-blur: blur(10px)")) throw new Error("openbmc must frost host modal masks (popup readability)");
-if (!obmcCss.textContent.includes("color-mix(in srgb, rgb(247, 250, 252) 86%, transparent)")) throw new Error("openbmc popup family must use the quota-watch recipe (86% opaque base + blur)");
+// Frost surfaces are rgba(), never color-mix(): a computed color-mix() gives
+// 0-1 float channels, which breaks plugins that rebuild rgb() from
+// getComputedStyle (see the Codex settings tab-bar regression in 1.7.1).
+if (!obmcCss.textContent.includes("rgba(247, 250, 252, 0.86)")) throw new Error("openbmc popup family must use the quota-watch recipe (86% opaque base + blur)");
 if (!obmcCss.textContent.includes(".dshm-panel") || !obmcCss.textContent.includes(".dsh-skins-pop")) throw new Error("openbmc popup family must cover dsh-m and dsh-skins panels");
 console.log("✓ openbmc active: baked-default token layer + backdrop + no wallpaper glass at default P + popup frost family");
 

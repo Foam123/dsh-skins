@@ -29,20 +29,27 @@ const skins = [
 // place per skin. frostDark serves both dark-frost assertions;
 // tipLight/tipDark are the 96% .lc-tip pairs; menuLight/menuDark are the
 // 0.94 rgba menu-trio pairs.
+// Frost surfaces are emitted as rgba() with the frost knob as the alpha, not
+// as color-mix(): a computed color-mix() serialises to color() with 0-1 float
+// channels, and any plugin that samples a backdrop by reading the first three
+// numbers of backgroundColor then paints near black (that is what turned the
+// Codex subscription tab bar solid black). rgba() keeps 0-255 channels.
+// NOTE: every value here is in whitespace-STRIPPED form, because the suite
+// matches against CSS with all whitespace removed (see header comment).
 const SKIN_TINTS = {
   openbmc: {
-    frostDark: "rgb(12,26,38)86%",
-    tipLight: "rgb(247,250,252)96%", tipDark: "rgb(12,26,38)96%",
+    frostLight: "rgba(247,250,252,0.86)", frostDark: "rgba(12,26,38,0.86)",
+    tipLight: "rgba(247,250,252,0.96)", tipDark: "rgba(12,26,38,0.96)",
     menuLight: "rgba(242,247,251,0.94)", menuDark: "rgba(14,33,48,0.94)",
   },
   meirenzhi: {
-    frostDark: "rgb(18,18,26)86%",
-    tipLight: "rgb(250,249,246)96%", tipDark: "rgb(18,18,26)96%",
+    frostLight: "rgba(250,249,246,0.86)", frostDark: "rgba(18,18,26,0.86)",
+    tipLight: "rgba(250,249,246,0.96)", tipDark: "rgba(18,18,26,0.96)",
     menuLight: "rgba(250,249,246,0.94)", menuDark: "rgba(18,18,26,0.94)",
   },
   uefi: {
-    frostDark: "rgb(23,18,45)86%",
-    tipLight: "rgb(248,247,255)96%", tipDark: "rgb(23,18,45)96%",
+    frostLight: "rgba(248,247,255,0.86)", frostDark: "rgba(23,18,45,0.86)",
+    tipLight: "rgba(248,247,255,0.96)", tipDark: "rgba(23,18,45,0.96)",
     menuLight: "rgba(248,247,255,0.94)", menuDark: "rgba(28,22,55,0.94)",
   },
 };
@@ -53,7 +60,7 @@ test("v1 dialog recipe survives in all three skins", () => {
     assert.ok(css.includes(".dshm-panel") && css.includes(".dshm-compat-dialog") && css.includes(".dshm-dshchip-tip"), `${id}: v1 dshm union missing`);
     assert.ok(css.includes(".dsh-skins-pop"), `${id}: v1 skins-pop missing`);
     assert.ok(css.includes("--dsw-mask-blur:blur(10px)"), `${id}: --dsw-mask-blur token light-up missing`);
-    assert.ok(css.includes("86%,transparent)"), `${id}: 86% color-mix tint missing`);
+    assert.ok(css.includes(SKIN_TINTS[id].frostLight), `${id}: 86% frost tint missing`);
     assert.ok(css.includes("backdrop-filter:blur(14px)saturate(1.3)"), `${id}: blur14 saturate1.3 missing`);
     assert.ok(css.includes("-webkit-backdrop-filter:blur(14px)saturate(1.3)"), `${id}: -webkit spelling missing`);
   }
@@ -99,7 +106,7 @@ test("v2 overlay-frost union present in all three skins (ADR-0007)", () => {
 test("v2 union carries a dark-theme variant per skin", () => {
   for (const { id, css } of skins) {
     assert.ok(
-      new RegExp(`data-ds-dark-theme\\][^{]*\\[class\\*="_float_"\\][^{]*\\{[^{}]*color-mix\\(insrgb,${SKIN_TINTS[id].frostDark.replaceAll(/([()])/g, "\\$&")}`).test(css),
+      new RegExp(`data-ds-dark-theme\\][^{]*\\[class\\*="_float_"\\][^{]*\\{[^{}]*${SKIN_TINTS[id].frostDark.replaceAll(/([()])/g, "\\$&")}`).test(css),
       `${id}: dark frost tint for the float shell missing`,
     );
   }
@@ -129,7 +136,7 @@ test("v3 dsh-context overlay cards frosted in all three skins (ADR-0007 amendmen
     }
     // dark-theme variant per skin
     assert.ok(
-      new RegExp(`data-ds-dark-theme\\][^{]*\\.lc-ov-card[^{}]*\\{[^{}]*color-mix\\(insrgb,${SKIN_TINTS[id].frostDark.replaceAll(/([()])/g, "\\$&")}`).test(css),
+      new RegExp(`data-ds-dark-theme\\][^{]*\\.lc-ov-card[^{}]*\\{[^{}]*${SKIN_TINTS[id].frostDark.replaceAll(/([()])/g, "\\$&")}`).test(css),
       `${id}: dark frost tint for .lc-ov-card missing`,
     );
   }
@@ -158,11 +165,11 @@ test("v3.2 .lc-tip readability frost in all three skins (ADR-0007 amendment)", (
   for (const { id, css } of skins) {
     const { tipLight: light, tipDark: dark } = SKIN_TINTS[id];
     assert.ok(
-      new RegExp(`\\.lc-tip\\{[^{}]*color-mix\\(insrgb,${light.replaceAll(/([()])/g, "\\$&")}[^{}]*backdrop-filter:blur\\(14px\\)saturate\\(1\\.3\\)`).test(css),
+      new RegExp(`\\.lc-tip\\{[^{}]*${light.replaceAll(/([()])/g, "\\$&")}[^{}]*backdrop-filter:blur\\(14px\\)saturate\\(1\\.3\\)`).test(css),
       `${id}: .lc-tip frost rule missing for tint ${light}`,
     );
     assert.ok(
-      new RegExp(`data-ds-dark-theme\\]\\.lc-tip\\{background:color-mix\\(insrgb,${dark.replaceAll(/([()])/g, "\\$&")}[^{}]*\\}`).test(css),
+      new RegExp(`data-ds-dark-theme\\]\\.lc-tip\\{background:${dark.replaceAll(/([()])/g, "\\$&")}[^{}]*\\}`).test(css),
       `${id}: .lc-tip dark tint missing`,
     );
     assert.ok(css.includes("-webkit-backdrop-filter:blur(14px)saturate(1.3)"), `${id}: .lc-tip -webkit spelling missing`);

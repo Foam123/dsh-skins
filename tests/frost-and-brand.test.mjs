@@ -87,13 +87,19 @@ test("titleBrand: never carries the runtime-owned separator", () => {
 test("frost: drives the floating-layer tint and blur", () => {
   const skin = createMeirenzhiSkin(stubJsx);
   const at = (frost) => skin.project({ ...base, frost }, assets).staticCss;
-  const pct = (css) => [...new Set((css.match(/rgb\([^)]*\) (\d+)%/g) || []).map((m) => Number(m.match(/(\d+)%/)[1])))].sort((a, b) => a - b);
+  // Frost surfaces are emitted as rgba() with the knob as alpha — deliberately
+  // NOT color-mix(), so a computed style keeps 0-255 channels (see the Codex
+  // tab-bar regression below).
+  const alphas = (css) => [...new Set(
+    (css.match(/rgba\(\d+, \d+, \d+, ([\d.]+)\)/g) || [])
+      .map((m) => Number(m.match(/rgba\(\d+, \d+, \d+, ([\d.]+)\)/)[1])),
+  )].sort((a, b) => a - b);
 
   const hi = at(100);
   const lo = at(30);
-  assert.ok(pct(hi).includes(100), "100% is fully opaque");
-  assert.ok(pct(lo).includes(30), "30% keeps the knob's value");
-  assert.ok(pct(hi).every((value) => value >= 100), "high frost never under-shoots");
+  assert.ok(alphas(hi).includes(1), "100% is fully opaque");
+  assert.ok(alphas(lo).includes(0.3), "30% keeps the knob's value");
+  assert.ok(alphas(hi).every((value) => value <= 1), "alpha never exceeds 1");
   assert.notEqual(hi, lo, "the knob changes the emitted CSS");
 });
 
@@ -113,18 +119,38 @@ test("frost: full-page plugin surfaces get a surface (they ship with none)", () 
   // The surface must actually be painted at the knob's density, and frosted.
   const idx = css.indexOf("[data-plugin-panel]");
   const block = css.slice(idx, css.indexOf("}", idx));
-  assert.ok(block.includes("91%"), "density follows the knob");
+  assert.ok(block.includes("0.91"), "density follows the knob");
   assert.ok(block.includes("backdrop-filter"), "and it is frosted, not just tinted");
 });
 
 test("frost: 86% reproduces the pre-knob recipe byte for byte (no visual change on upgrade)", () => {
   const skin = createMeirenzhiSkin(stubJsx);
   const css = skin.project({ ...base, frost: 86 }, assets).staticCss;
-  assert.ok(css.includes("86%, transparent)"), "86% tint");
+  assert.ok(css.includes("rgba(250, 249, 246, 0.86)"), "86% tint");
   // The template writes "blur(14px) saturate(1.3)" — assert the value, not an
   // exact substring that also depends on the declaration's spacing.
   assert.ok(/backdrop-filter: blur\(14px\) saturate\(1\.3\)/.test(css), "14px blur");
-  assert.ok(css.includes("96%, transparent)"), ".lc-tip keeps its +10 concentration");
+  assert.ok(css.includes("rgba(250, 249, 246, 0.96)"), ".lc-tip keeps its +10 concentration");
+});
+
+test("frost: never emits color-mix() for a surface (0-1 float channels break samplers)", () => {
+  // Regression guard for the Codex subscription tab bar. dsh-codex-subscription
+  // samples the nearest painted ancestor via
+  //   getComputedStyle(parent).backgroundColor.match(/[\d.]+/g)
+  // and rebuilds rgb(parts[0], parts[1], parts[2]). A color-mix() computes to
+  // color(srgb 0.98 0.98 0.96 / 0.91), so those parts are 0-1 floats and the
+  // rebuild paints near-black — the solid black strip behind the settings tabs.
+  // rgba() keeps 0-255 channels, so any such sampler stays correct.
+  for (const factory of [createOpenBmcHarness, createUefiHarness, createMeirenzhiSkin]) {
+    const skin = factory(stubJsx);
+    const values = { ...base, panelOpacity: 55, frost: 91 };
+    const fx = skin.project(values, assets);
+    const css = fx.staticCss;
+    assert.ok(!/background:[^;}]*color-mix/.test(css), `${skin.id}: no color-mix() surface backgrounds`);
+    const surface = fx.tokenOverrides["--dsh-skins-frost-surface"];
+    assert.ok(surface === undefined || Object.values(surface).every((v) => v.startsWith("rgba(")),
+      `${skin.id}: the surface token is rgba() so computed channels stay 0-255`);
+  }
 });
 
 test("frost: default is 86 for every skin (upgrade is a no-op)", () => {
@@ -146,9 +172,11 @@ test("frost: publishes a dedicated surface token that follows the knob", () => {
   // knobs and break those goldens.
   const skin = createMeirenzhiSkin(stubJsx);
   const at = (frost) => skin.project({ ...base, frost }, assets).tokenOverrides["--dsh-skins-frost-surface"];
-  assert.ok(at(86).light.includes("86%"), "86% by default");
-  assert.ok(at(40).light.includes("40%"), "follows the knob down");
-  assert.ok(at(40).dark.includes("40%"), "both schemes");
+  assert.ok(at(86).light.includes("0.86"), "86% by default");
+  assert.ok(at(40).light.includes("0.40"), "follows the knob down");
+  assert.ok(at(40).dark.includes("0.40"), "both schemes");
+  assert.ok(at(86).light.startsWith("rgba("),
+    "rgba(), not color-mix(): a computed color-mix() drops to 0-1 floats and breaks backdrop samplers");
   assert.equal(
     skin.project({ ...base, frost: 40 }, assets).tokenOverrides["--dsw-alias-bg-layer-2"],
     undefined,
@@ -159,21 +187,21 @@ test("frost: publishes a dedicated surface token that follows the knob", () => {
 test("frostFamilyCss: parameterised density and blur, 86/14 by default", () => {
   const tints = { frost: { light: "1, 2, 3", dark: "4, 5, 6" }, menu: { light: "1, 2, 3", dark: "4, 5, 6" } };
   const base = frostFamilyCss("body[x]", tints);
-  assert.ok(base.includes("86%, transparent)"), "default density is the historical value");
+  assert.ok(base.includes("rgba(1, 2, 3, 0.86)"), "default density is the historical value");
   assert.ok(base.includes("blur(14px)"), "default blur is the historical value");
 
   const thin = frostFamilyCss("body[x]", tints, { frost: 20 });
-  assert.ok(thin.includes("20%, transparent)"), "density follows the knob");
+  assert.ok(thin.includes("rgba(1, 2, 3, 0.20)"), "density follows the knob");
   assert.ok(!thin.includes("blur(14px)"), "blur drops with the knob");
 });
 
 test("frostFamilyCss: out-of-range input is clamped, not passed through", () => {
   const tints = { frost: { light: "1, 2, 3", dark: "4, 5, 6" }, menu: { light: "1, 2, 3", dark: "4, 5, 6" } };
   const high = frostFamilyCss("body[x]", tints, { frost: 999 });
-  assert.ok(high.includes("100%, transparent)"), "clamped to 100");
+  assert.ok(high.includes("rgba(1, 2, 3, 1.00)"), "clamped to 100");
   assert.ok(!high.includes("999"), "the raw value never reaches CSS");
   const low = frostFamilyCss("body[x]", tints, { frost: -5 });
-  assert.ok(low.includes("0%, transparent)"), "clamped to 0");
+  assert.ok(low.includes("rgba(1, 2, 3, 0.00)"), "clamped to 0");
 });
 
 test("buildStaticCss stays in sync with staticCss at the factory default", () => {
@@ -186,7 +214,6 @@ test("buildStaticCss stays in sync with staticCss at the factory default", () =>
       assets,
     ).staticCss;
     assert.equal(typeof projected, "string");
-    assert.ok(projected.includes("86%, transparent)") || projected.includes("86%,transparent)"),
-      `${skin.id}: 86% tint present`);
+    assert.ok(/rgba\(\d+, \d+, \d+, 0\.86\)/.test(projected), `${skin.id}: 86% tint present`);
   }
 });
