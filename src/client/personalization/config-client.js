@@ -40,6 +40,10 @@ const FETCH_TIMEOUT_MS = 3000;
 // 不上来"). Still a hard cap, not an idle timeout: a hung connection must
 // release the panel's sequential batch loop instead of pinning it forever.
 const UPLOAD_TIMEOUT_MS = 120_000;
+// ADR-0018: the write dialect's retry sentinel — a conflict/unknown-409 policy
+// returns this (instead of a final result) to spend the single retry on a
+// fresh baseRevision. Symbol so it can never collide with a result object.
+const RETRY = Symbol("dsh-skins:write-dialect-retry");
 
 function cloneSkins(skins) {
   return skins === undefined || skins === null ? {} : structuredClone(skins);
@@ -65,11 +69,12 @@ export function createConfigClient(options = {}) {
   // (a conflict replaces the error); error and reverted legally coexist — a
   // partial-dangling batch excises AND names the survivor's failure.
   let notices = [];
-  // Monotonic counter bumped on every COMMITTED write. The panel watches it to
-  // say "已保存" — the auto-save debounce is deliberately invisible otherwise,
-  // which reads as "my edit did nothing".
-  let saveTick = 0;
   let channel = null;
+  // Monotonic counter bumped on every COMMITTED write (field flush, gallery op
+  // or UI preference). The panel and the settings page watch it to say
+  // 「已保存」: auto-save is otherwise invisible, which reads as "my edit did
+  // nothing" — that misreading is exactly what hid the brand-name bug.
+  let saveTick = 0;
 
   /** Replace the conflict/error notices (the kind-exclusive pair); the
    * reverted notice is untouched — only a healthy flush retires it. */
@@ -107,14 +112,14 @@ export function createConfigClient(options = {}) {
       skins: cloneSkins(snapshot.skins),
       library: snapshot.library,
       references: snapshot.references ?? {},
-      // Plugin-wide UI preferences as the Host resolves them (defaults
-      // applied) — the switcher shell reads `ui.entryPlacement` to decide
-      // whether it renders into the sidebar foot at all.
-      ui: { ...(snapshot.ui ?? {}) },
       recovery: snapshot.recovery,
       quota: snapshot.quota,
       notices: structuredClone(notices),
       dirtyCount: previews.size,
+      // Plugin-wide UI preferences as the Host resolves them (defaults
+      // applied) — the switcher shell reads `ui.entryPlacement` to decide
+      // whether it renders into the sidebar foot at all.
+      ui: { ...(snapshot.ui ?? {}) },
       saveTick,
     };
   }
@@ -216,6 +221,84 @@ export function createConfigClient(options = {}) {
     }, FLUSH_DEBOUNCE_MS);
   }
 
+  /**
+   * The write dialect's single client-side interpreter (ADR-0018). The shared
+   * skeleton lives here and only here: write-chain serialization, the
+   * execution-time write gate, PATCH construction, the attempt loop, the
+   * STORE_READONLY downgrade, and the UNIFIED 409 code table — every 409
+   * code the Host owns is dispatched from this one ladder; adding a code is
+   * one branch here plus a policy hook. Per-path dispositions are injected
+   * as the policy: the ADR-0003 revision-advance retry (field writes), the
+   * ADR-0015 Q10-a goal predicate (gallery writes), issues excision, and the
+   * return-shape translation. A conflict / unknown-409 policy may return the
+   * RETRY sentinel to spend the single retry on a fresh baseRevision.
+   */
+  function runWriteOp(operations, policy) {
+    writeChain = writeChain.then(async () => {
+      try {
+        if (disposed) return policy.disposed();
+        const blocked = writeGate();
+        if (blocked !== null) return policy.gated(blocked);
+        const attemptedRevision = snapshot.revision;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          let response;
+          try {
+            response = await request("/config", {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ baseRevision: snapshot.revision, operations: operations() }),
+            });
+          } catch (error) {
+            return policy.offline(error);
+          }
+          if (disposed) return policy.disposedMidflight();
+          if (response.status === 409) {
+            const conflictBody = await response.json().catch(() => null);
+            const code = conflictBody?.code;
+            const errorMessage = conflictBody?.error ?? "HTTP 409";
+            if (code === "STORE_READONLY") {
+              setFlushFailure(null, null);
+              setStatus("unsupported-readonly");
+              return policy.readOnly(conflictBody);
+            }
+            if (code === "REVISION_CONFLICT") {
+              const decision = await policy.onConflict({ attempt, attemptedRevision, errorMessage });
+              if (decision === RETRY) continue;
+              return decision;
+            }
+            if (code === "STORE_RECOVERY_REQUIRED") {
+              const decision = await policy.onRecoveryRequired(errorMessage);
+              // Contract tripwire (ADR-0018, review note): only the conflict /
+              // unknown-409 policies may resolve RETRY; a recovery policy doing
+              // so would leak the sentinel to callers — fail closed instead,
+              // in the same spirit as the retained typeof guard (ADR-0017 D5).
+              if (decision === RETRY) {
+                throw new Error("[dsh-skins] onRecoveryRequired must resolve, never RETRY");
+              }
+              return decision;
+            }
+            const decision = await policy.onUnknown409({ attempt, errorMessage });
+            if (decision === RETRY) continue;
+            return decision;
+          }
+          if (!response.ok) return await policy.onError(response);
+          const result = await policy.onSuccess(response);
+          // A committed write of ANY kind flips the save indicator.
+          saveTick += 1;
+          // Resync from the Host rather than trusting a racing local snapshot:
+          // a refetch issued mid-flight may otherwise resurrect pre-write state.
+          await refetch();
+          announce();
+          return result;
+        }
+        return policy.exhausted();
+      } catch (error) {
+        return policy.chainError(error);
+      }
+    });
+    return writeChain;
+  }
+
   function flushNow() {
     if (flushTimer !== null) {
       clearTimeout(flushTimer);
@@ -229,146 +312,131 @@ export function createConfigClient(options = {}) {
       return value === null ? { op: "delete", skinId, key } : { op: "set", skinId, key, value };
     });
     const count = buildOperations().length;
-    writeChain = writeChain.then(async () => {
-      try {
-        if (disposed) return { flushed: 0, blocked: "disposed" };
-        const blocked = writeGate();
-        if (blocked !== null) return { flushed: 0, blocked };
-        // ADR-0003: retry once only after a conflict refetch has actually
-        // applied a newer normal-mode snapshot.
-        const attemptedRevision = snapshot.revision;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          const response = await request("/config", {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ baseRevision: snapshot.revision, operations: buildOperations() }),
-          });
-          if (disposed) return { flushed: 0 };
-          if (response.status === 409) {
-            const conflictBody = await response.json().catch(() => null);
-            const code = conflictBody?.code;
-            const errorMessage = conflictBody?.error ?? "HTTP 409";
-            if (code === "STORE_READONLY") {
-              setFlushFailure(null, null);
-              setStatus("unsupported-readonly");
-              return { flushed: 0, blocked: "conflict", errorMessage: conflictBody?.error ?? "" };
-            }
-            if (code === "REVISION_CONFLICT") {
-              if (attempt === 1) {
-                setFlushFailure("REVISION_CONFLICT", null);
-                emit();
-                return { flushed: 0, blocked: "conflict" };
-              }
-              const refreshed = await refetch();
-              const mayRetry = refreshed.status === "synced"
-                && refreshed.mode === "normal"
-                && refreshed.revision !== attemptedRevision;
-              if (mayRetry) continue;
-
-              if (refreshed.mode === "recovery") {
-                setFlushFailure(null, null);
-                emit();
-                return { flushed: 0, blocked: "recovery" };
-              }
-              if (refreshed.status === "offline-failed") {
-                setFlushFailure(null, null);
-                emit();
-                return { flushed: 0, blocked: "offline" };
-              }
-              if (refreshed.status === "unsupported-readonly") {
-                setFlushFailure(null, null);
-                emit();
-                return { flushed: 0, blocked: "unsupported" };
-              }
-              // Still synced+normal but no new revision landed: no other UI
-              // state surfaces this, so ADR-0003 requires a visible conflict.
-              setFlushFailure("REVISION_CONFLICT", null);
-              emit();
-              return { flushed: 0, blocked: "conflict" };
-            }
-            if (code === "STORE_RECOVERY_REQUIRED") {
-              const refreshed = await refetch();
-              if (refreshed.mode === "recovery") {
-                setFlushFailure(null, null);
-                emit();
-                return { flushed: 0, blocked: "recovery" };
-              }
-              setFlushFailure(null, errorMessage);
-              emit();
-              return { flushed: 0, blocked: "error", errorMessage };
-            }
-            setFlushFailure(null, errorMessage);
-            emit();
-            return { flushed: 0, blocked: "error", errorMessage };
-          }
-          if (!response.ok) {
-            const errorBody = await response.json().catch(() => null);
-            const errorMessage = errorBody?.error ?? `HTTP ${response.status}`;
-            // ADR-0015: a 400 with structured params.issues lets the client
-            // NAME the poison. Dangling references (MISSING_ASSET / BAD_ASSET)
-            // are excised and reported on the reverted notice instead of staying
-            // dirty forever and blocking every later auto-save; every other
-            // issue keeps its previews dirty and surfaces the named error.
-            const issues = Array.isArray(errorBody?.params?.issues) ? errorBody.params.issues : null;
-            let excised = false;
-            let onlyDangling = issues !== null && issues.length > 0;
-            if (issues !== null) {
-              for (const issue of issues) {
-                const dangling = issue.code === "MISSING_ASSET" || issue.code === "BAD_ASSET";
-                if (!dangling) onlyDangling = false;
-                if (dangling && typeof issue.skinId === "string" && typeof issue.key === "string") {
-                  const composite = `${issue.skinId} ${issue.key}`;
-                  // Only a deletion in THIS round counts: the continuation is
-                  // bounded by "each round removes ≥1 preview" (a repeat issue
-                  // for an already-excised field must not re-arm the loop).
-                  if (previews.has(composite)) {
-                    previews.delete(composite);
-                    excised = true;
-                    noteReverted({ skinId: issue.skinId, key: issue.key });
-                  }
-                }
-              }
-            }
-            // A batch whose issues are ALL dangling is fully self-healed: the
-            // named reversion notice replaces the generic failure strip — but
-            // only when something was actually excised. A dangling-coded
-            // issue with a malformed payload (no skinId/key) keeps its named
-            // error: unknown shapes never pass silently.
-            const healed = onlyDangling && excised;
-            setFlushFailure(null, healed ? null : errorMessage);
-            emit();
-            // Self-healing continuation: re-flush the surviving previews
-            // without waiting for the user's next edit. Bounded — each
-            // continuation excises at least one more preview or terminates on
-            // a named error.
-            if (excised && previews.size > 0) void flushNow();
-            if (healed) return { flushed: 0, blocked: null, selfHealed: true };
-            return { flushed: 0, blocked: "error", errorMessage };
-          }
-          await response.json().catch(() => null); // drained; resync happens in refetch()
-          // Clear only previews the user has not superseded during the flight.
-          for (const [composite, value] of intent) {
-            if (previews.get(composite) === value) previews.delete(composite);
-          }
-          setFlushFailure(null, null);
-          notices = []; // a healthy flush retires every notice (conflict, error, reverted)
-          saveTick += 1;
-          // Resync from the Host rather than trusting a racing local snapshot:
-          // a refetch issued mid-flight may otherwise resurrect pre-write state.
-          await refetch();
-          announce();
-          return { flushed: count };
+    // ADR-0018: the dialect machine lives in runWriteOp; this thin wrapper
+    // owns only the field-path policy — the ADR-0003 conflict discipline and
+    // the ADR-0015 dangling-preview excision.
+    return runWriteOp(buildOperations, {
+      disposed: () => ({ flushed: 0, blocked: "disposed" }),
+      disposedMidflight: () => ({ flushed: 0 }),
+      gated: (blocked) => ({ flushed: 0, blocked }),
+      offline: (error) => {
+        throw error; // one network failure must reach chainError, never poison the chain
+      },
+      readOnly: (conflictBody) => ({ flushed: 0, blocked: "conflict", errorMessage: conflictBody?.error ?? "" }),
+      // ADR-0003: retry once only after a conflict refetch has actually
+      // applied a newer normal-mode snapshot.
+      onConflict: async ({ attempt, attemptedRevision }) => {
+        if (attempt === 1) {
+          setFlushFailure("REVISION_CONFLICT", null);
+          emit();
+          return { flushed: 0, blocked: "conflict" };
         }
+        const refreshed = await refetch();
+        const mayRetry = refreshed.status === "synced"
+          && refreshed.mode === "normal"
+          && refreshed.revision !== attemptedRevision;
+        if (mayRetry) return RETRY;
+
+        if (refreshed.mode === "recovery") {
+          setFlushFailure(null, null);
+          emit();
+          return { flushed: 0, blocked: "recovery" };
+        }
+        if (refreshed.status === "offline-failed") {
+          setFlushFailure(null, null);
+          emit();
+          return { flushed: 0, blocked: "offline" };
+        }
+        if (refreshed.status === "unsupported-readonly") {
+          setFlushFailure(null, null);
+          emit();
+          return { flushed: 0, blocked: "unsupported" };
+        }
+        // Still synced+normal but no new revision landed: no other UI
+        // state surfaces this, so ADR-0003 requires a visible conflict.
+        setFlushFailure("REVISION_CONFLICT", null);
+        emit();
         return { flushed: 0, blocked: "conflict" };
-      } catch {
+      },
+      onRecoveryRequired: async (errorMessage) => {
+        const refreshed = await refetch();
+        if (refreshed.mode === "recovery") {
+          setFlushFailure(null, null);
+          emit();
+          return { flushed: 0, blocked: "recovery" };
+        }
+        setFlushFailure(null, errorMessage);
+        emit();
+        return { flushed: 0, blocked: "error", errorMessage };
+      },
+      onUnknown409: ({ errorMessage }) => {
+        setFlushFailure(null, errorMessage);
+        emit();
+        return { flushed: 0, blocked: "error", errorMessage };
+      },
+      onError: async (response) => {
+        // ADR-0015: a 400 with structured params.issues lets the client
+        // NAME the poison. Dangling references (MISSING_ASSET / BAD_ASSET)
+        // are excised and reported on the reverted notice instead of staying
+        // dirty forever and blocking every later auto-save; every other
+        // issue keeps its previews dirty and surfaces the named error.
+        const errorBody = await response.json().catch(() => null);
+        const errorMessage = errorBody?.error ?? `HTTP ${response.status}`;
+        const issues = Array.isArray(errorBody?.params?.issues) ? errorBody.params.issues : null;
+        let excised = false;
+        let onlyDangling = issues !== null && issues.length > 0;
+        if (issues !== null) {
+          for (const issue of issues) {
+            const dangling = issue.code === "MISSING_ASSET" || issue.code === "BAD_ASSET";
+            if (!dangling) onlyDangling = false;
+            if (dangling && typeof issue.skinId === "string" && typeof issue.key === "string") {
+              const composite = `${issue.skinId} ${issue.key}`;
+              // Only a deletion in THIS round counts: the continuation is
+              // bounded by "each round removes ≥1 preview" (a repeat issue
+              // for an already-excised field must not re-arm the loop).
+              if (previews.has(composite)) {
+                previews.delete(composite);
+                excised = true;
+                noteReverted({ skinId: issue.skinId, key: issue.key });
+              }
+            }
+          }
+        }
+        // A batch whose issues are ALL dangling is fully self-healed: the
+        // named reversion notice replaces the generic failure strip — but
+        // only when something was actually excised. A dangling-coded
+        // issue with a malformed payload (no skinId/key) keeps its named
+        // error: unknown shapes never pass silently.
+        const healed = onlyDangling && excised;
+        setFlushFailure(null, healed ? null : errorMessage);
+        emit();
+        // Self-healing continuation: re-flush the surviving previews
+        // without waiting for the user's next edit. Bounded — each
+        // continuation excises at least one more preview or terminates on
+        // a named error.
+        if (excised && previews.size > 0) void flushNow();
+        if (healed) return { flushed: 0, blocked: null, selfHealed: true };
+        return { flushed: 0, blocked: "error", errorMessage };
+      },
+      onSuccess: async (response) => {
+        await response.json().catch(() => null); // drained; resync happens in refetch()
+        // Clear only previews the user has not superseded during the flight.
+        for (const [composite, value] of intent) {
+          if (previews.get(composite) === value) previews.delete(composite);
+        }
+        setFlushFailure(null, null);
+        notices = []; // a healthy flush retires every notice (conflict, error, reverted)
+        return { flushed: count };
+      },
+      exhausted: () => ({ flushed: 0, blocked: "conflict" }),
+      chainError: () => {
         // The chain itself must stay fulfilled: one network failure may
         // never poison subsequent flushes (previews stay dirty for retry).
         setFlushFailure(null, null);
         emit();
         return { flushed: 0, blocked: "error" };
-      }
+      },
     });
-    return writeChain;
   }
 
   function announce() {
@@ -412,66 +480,6 @@ export function createConfigClient(options = {}) {
     setFlushFailure(null, null); // a fresh edit always clears the failure strip
     scheduleFlush();
     emit();
-  }
-
-  /**
-   * Persist one plugin-wide UI preference (not a skin field, so no preview
-   * layer: it has no visual effect until the shell re-reads it, and the
-   * shell is the only consumer). Serialized on the same write chain as field
-   * flushes and gallery ops so the baseRevision precondition stays coherent.
-   */
-  function setUiPreference(key, value) {
-    writeChain = writeChain.then(async () => {
-      if (disposed) return { error: "disposed" };
-      const blocked = writeGate();
-      if (blocked !== null) return { error: blocked };
-      const operation = value === undefined || value === null
-        ? { op: "deleteUi", key }
-        : { op: "setUi", key, value };
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        let response;
-        try {
-          response = await request("/config", {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ baseRevision: snapshot.revision, operations: [operation] }),
-          });
-        } catch {
-          return { error: "OFFLINE" };
-        }
-        if (disposed) return { error: "disposed" };
-        if (response.status === 409) {
-          const conflictBody = await response.json().catch(() => null);
-          if (conflictBody?.code === "STORE_READONLY") {
-            setStatus("unsupported-readonly");
-            return { error: "conflict" };
-          }
-          await refetch();
-          if (attempt === 1) {
-            setFlushFailure(null, null);
-            emit();
-            return { error: "REVISION_CONFLICT" };
-          }
-          continue;
-        }
-        if (!response.ok) {
-          const body = await response.json().catch(() => null);
-          return { error: body?.code ?? `HTTP ${response.status}` };
-        }
-        const body = await response.json().catch(() => null);
-        // The Host answers a UI-only batch with the effective map; applying
-        // it locally avoids a second round trip and keeps other tabs in step
-        // through the usual announce() ping.
-        snapshot = { ...snapshot, revision: body?.revision ?? snapshot.revision, ui: body?.ui ?? snapshot.ui };
-        setFlushFailure(null, null);
-        saveTick += 1;
-        emit();
-        announce();
-        return { ui: snapshot.ui };
-      }
-      return { error: "REVISION_CONFLICT" };
-    });
-    return writeChain;
   }
 
   /** Record an unsaved reset-to-default (a delete op) for the field. */
@@ -627,64 +635,66 @@ export function createConfigClient(options = {}) {
   /**
    * One gallery write through the unified PATCH dialect (ADR-0015), serialized
    * on the write chain with field flushes (a pending debounced flush must
-   * never race the delete's baseRevision). Conflict semantics: 409 → refetch
-   * → the goal is already achieved (asset gone / library empty) → silent
-   * success (GLOSSARY 悬空预览/B2); otherwise retry once on the fresh
-   * baseRevision, then a named error. Success keeps the post-success refetch:
+   * never race the delete's baseRevision). Conflict semantics (ADR-0018): the
+   * conflict family (REVISION_CONFLICT and unknown 409s) → refetch → the goal
+   * is already achieved (asset gone / library empty) → silent success
+   * (GLOSSARY 悬空预览/B2); otherwise retry once on the fresh baseRevision,
+   * then a named error; STORE_RECOVERY_REQUIRED is dispatched by name — one
+   * refetch, then the host-stable code passes through unsuppressed, with no
+   * goal check and no retry. Success keeps the post-success refetch:
    * deletes rewrite server-computed references, which no local merge can
    * reproduce (asymmetric with the append-only upload).
    */
   function runGalleryOp(operations, goalAchieved) {
-    writeChain = writeChain.then(async () => {
-      if (disposed) return { error: "disposed" };
-      const blocked = writeGate();
-      if (blocked !== null) return { error: blocked };
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        let response;
-        try {
-          response = await request("/config", {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ baseRevision: snapshot.revision, operations }),
-          });
-        } catch {
-          return { error: "OFFLINE" };
-        }
-        if (disposed) return { error: "disposed" };
-        if (response.status === 409) {
-          const conflictBody = await response.json().catch(() => null);
-          if (conflictBody?.code === "STORE_READONLY") {
-            setFlushFailure(null, null);
-            setStatus("unsupported-readonly");
-            return { error: "conflict" };
-          }
-          await refetch();
-          if (goalAchieved()) return { affectedSkins: [] }; // a contender finished the job
-          if (attempt === 1) {
-            setFlushFailure(null, null);
-            emit();
-            return { error: "REVISION_CONFLICT" };
-          }
-          continue; // retry once on the fresh baseRevision
-        }
-        if (!response.ok) {
-          const body = await response.json().catch(() => null);
-          if (body?.code === "INVALID_CONFIG"
-            && body.params?.issues?.some((issue) => issue.code === "ASSET_NOT_FOUND")) {
-            await refetch();
-            if (goalAchieved()) return { affectedSkins: [] };
-            return { error: "ASSET_NOT_FOUND" };
-          }
-          return { error: body?.code ?? `HTTP ${response.status}` };
-        }
-        const body = await response.json().catch(() => null);
-        await refetch();
-        announce();
-        return { affectedSkins: body?.affectedSkins ?? [], revision: body?.revision };
+    // ADR-0018: the dialect machine lives in runWriteOp; this thin wrapper
+    // owns only the gallery-path policy — the ADR-0015 Q10-a goal predicate
+    // (a contender finishing the job is silent success) and the
+    // ASSET_NOT_FOUND excision special case.
+    const conflictDisposition = async ({ attempt }) => {
+      await refetch();
+      if (goalAchieved()) return { affectedSkins: [] }; // a contender finished the job
+      if (attempt === 1) {
+        setFlushFailure(null, null);
+        emit();
+        return { error: "REVISION_CONFLICT" };
       }
-      return { error: "REVISION_CONFLICT" };
+      return RETRY; // retry once on the fresh baseRevision
+    };
+    return runWriteOp(() => operations, {
+      disposed: () => ({ error: "disposed" }),
+      disposedMidflight: () => ({ error: "disposed" }),
+      gated: (blocked) => ({ error: blocked }),
+      offline: () => ({ error: "OFFLINE" }),
+      readOnly: () => ({ error: "conflict" }),
+      onConflict: conflictDisposition,
+      // ADR-0018 alignment: the recovery code is dispatched BY NAME now —
+      // never folded into the blind conflict retry. Code passthrough: the
+      // Host-stable code reaches the caller unsuppressed (host-errors.js
+      // resolves it), after one refetch so the recovery banner can land.
+      onRecoveryRequired: async () => {
+        await refetch();
+        return { error: "STORE_RECOVERY_REQUIRED" };
+      },
+      onUnknown409: conflictDisposition, // unknown 409s keep the goal-first read
+      onError: async (response) => {
+        const body = await response.json().catch(() => null);
+        if (body?.code === "INVALID_CONFIG"
+          && body.params?.issues?.some((issue) => issue.code === "ASSET_NOT_FOUND")) {
+          await refetch();
+          if (goalAchieved()) return { affectedSkins: [] };
+          return { error: "ASSET_NOT_FOUND" };
+        }
+        return { error: body?.code ?? `HTTP ${response.status}` };
+      },
+      onSuccess: async (response) => {
+        const body = await response.json().catch(() => null);
+        return { affectedSkins: body?.affectedSkins ?? [], revision: body?.revision };
+      },
+      exhausted: () => ({ error: "REVISION_CONFLICT" }),
+      chainError: (error) => {
+        throw error; // pre-ADR-0018 shape: chain-level faults reject the chain
+      },
     });
-    return writeChain;
   }
 
   async function deleteImage(id) {
@@ -736,13 +746,63 @@ export function createConfigClient(options = {}) {
     return `${baseUrl}/assets/${meta.id}.${meta.extension}`;
   }
 
+  /**
+   * Persist one plugin-wide UI preference (entry placement, and anything else
+   * added to UI_PREFERENCES later).
+   *
+   * This is NOT a skin field, so it has no preview layer: the shell is its only
+   * consumer and re-reads it on every emit. It rides runWriteOp like every
+   * other write, so the write-chain serialization, the execution-time write
+   * gate, PATCH construction and the whole 409 ladder stay single-sourced
+   * (ADR-0018) — this wrapper owns only the UI-path policy.
+   */
+  function setUiPreference(key, value) {
+    const operation = value === undefined || value === null
+      ? { op: "deleteUi", key }
+      : { op: "setUi", key, value };
+    return runWriteOp(() => [operation], {
+      disposed: () => ({ error: "disposed" }),
+      disposedMidflight: () => ({ error: "disposed" }),
+      gated: (blocked) => ({ error: blocked }),
+      // One network failure is surfaced as an error result rather than thrown:
+      // the switch must roll back visibly instead of wedging the chain.
+      offline: () => ({ error: "OFFLINE" }),
+      readOnly: () => ({ error: "conflict" }),
+      // A UI write is tiny and idempotent, so the whole conflict policy is
+      // "refetch, then spend the single retry"; a second conflict is named.
+      onConflict: async ({ attempt }) => {
+        await refetch();
+        if (attempt === 1) return { error: "REVISION_CONFLICT" };
+        return RETRY;
+      },
+      onRecoveryRequired: async () => {
+        await refetch();
+        return { error: "STORE_RECOVERY_REQUIRED" };
+      },
+      onUnknown409: ({ errorMessage }) => ({ error: errorMessage }),
+      onError: async (response) => {
+        const body = await response.json().catch(() => null);
+        return { error: body?.code ?? `HTTP ${response.status}` };
+      },
+      // The Host answers a UI-only batch with the effective map, so callers get
+      // the resolved value without a second round trip (refetch still runs and
+      // keeps other tabs in step through announce()).
+      onSuccess: async (response) => {
+        const body = await response.json().catch(() => null);
+        return { ui: body?.ui ?? { ...(snapshot.ui ?? {}) } };
+      },
+      exhausted: () => ({ error: "REVISION_CONFLICT" }),
+      chainError: () => ({ error: "OFFLINE" }),
+    });
+  }
+
   const api = {
     boot: refetch,
     refetch,
     flushNow,
+    setUiPreference,
     preview,
     previewReset,
-    setUiPreference,
     effectiveOverrides,
     uploadImage,
     deleteImage,

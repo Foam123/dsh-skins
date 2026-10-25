@@ -26,6 +26,20 @@ test("all six dsh-client peers pin the union floor; cordis peer untouched", () =
   assert.equal(pkg.peerDependencies["@deepseek-ai/cordis"], "^4.0.1");
 });
 
+test("the DSH host floor is declared and matches the peer floor", () => {
+  // dsh.engines.dsh is what the host's compat gate reads BEFORE loading the
+  // plugin: peerDependencies already blocks pnpm installs, but a profile
+  // installed by an older DSH never evaluates them. Declaring the same range
+  // here makes the mismatch a load-time error instead of a silent breakage
+  // (this fork hit exactly that when DSH moved to 0.2.1-rc.3).
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(pkg.dsh.engines.dsh, RANGE);
+  for (const v of ["0.2.0-rc.1", "0.2.1-rc.3"]) {
+    assert.ok(semver.satisfies(v, pkg.dsh.engines.dsh, { includePrerelease: true }), v);
+  }
+  assert.ok(!semver.satisfies("0.1.7-rc.2", pkg.dsh.engines.dsh, { includePrerelease: true }));
+});
+
 test("union floor accepts the target lines and stable futures", () => {
   for (const v of ["0.2.0-rc.1", "0.2.0-rc.2", "0.2.1-rc.1", "0.2.1-rc.2", "0.2.1", "0.2.2", "0.3.0", "1.0.0"]) {
     assert.ok(semver.satisfies(v, RANGE), `expected ${v} to satisfy ${RANGE}`);

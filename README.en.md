@@ -4,7 +4,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/iasiv5/dsh-skins/ci.yml?branch=main&label=CI)](../../actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/iasiv5/dsh-skins?label=License)](./LICENSE)
 [![npm](https://img.shields.io/npm/v/@iasiv5/dsh-skins?label=npm)](https://www.npmjs.com/package/@iasiv5/dsh-skins)
-[![DSH Web](https://img.shields.io/badge/DSH%20Web-0.2.0--rc.2%20verified-2563eb)](#faq)
+[![DSH Web](https://img.shields.io/badge/DSH%20Web-0.2.1--rc.3%20verified-2563eb)](#faq)
 
 English · [中文](./README.md)
 
@@ -151,7 +151,7 @@ In the **DSH Desktop app**, the shell chrome — sidebar, caption strip, right p
 
 ![Desktop profile — solid chrome + wallpaper in the conversation area (meirenzhi · dark)](docs/assets/preview-desktop-1.webp)
 
-- Verified with dsh Desktop `0.2.1-rc.2` (Windows); macOS / Linux Desktop currently follow the Web form and will be adapted in a later release.
+- Verified with dsh Desktop `0.2.1-rc.3` (Windows); macOS / Linux Desktop currently follow the Web form and will be adapted in a later release.
 - The right panel in fullscreen is the solid skin base color; the wallpaper is not shown through it.
 
 ## The skin switcher
@@ -191,10 +191,10 @@ Pick "DeepSeek Harness (Official)" in the skin switcher, or open `/?skin=officia
 Update duty has moved to the dsh-m marketplace and the DSH CLI (ADR-0008); the skin switcher only handles skins and personalization.
 
 **Which DSH Web versions are supported?**
-Verified with DSH Web `0.2.0-rc.2`. Later rc builds of the same series are expected to work, but unverified versions carry no promise. Requires DSH `0.2.0-rc.1` or later; older DSH versions are blocked from upgrading to 1.5.8+ by the peer dependency floor.
+Verified with DSH Web `0.2.0-rc.2` and `0.2.1-rc.3` (on rc.3 the two hyphenated-hash hooks were re-derived and the guard's hash alphabet corrected). Later rc builds of the same series are expected to work, but unverified versions carry no promise. Requires DSH `0.2.0-rc.1` or later; older DSH versions are blocked from upgrading to 1.5.8+ by the peer dependency floor.
 
 **Is the Desktop profile supported?**
-Yes. The DSH Desktop app and the Web profile are installed independently and do not affect each other; the desktop form (solid chrome + wallpaper in the conversation area) is described under "The Desktop profile". Verified with dsh Desktop `0.2.1-rc.2` (Windows).
+Yes. The DSH Desktop app and the Web profile are installed independently and do not affect each other; the desktop form (solid chrome + wallpaper in the conversation area) is described under "The Desktop profile". Verified with dsh Desktop `0.2.1-rc.3` (Windows).
 
 **Does my appearance preference sync across browsers?**
 In the browser on the DSH host machine (loopback), the preference is persisted by the DSH Host and shared naturally. Other remote browsers keep the preference in their own `localStorage` — independent per browser, never overwritten.
