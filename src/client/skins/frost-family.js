@@ -109,23 +109,37 @@ export function frostFamilyCss(scope, tints, options = {}) {
     position: relative;
     z-index: 10;
   }
-  /* Full-page plugin surfaces — the plugin manager page [data-plugin-panel]
-     and the market page [data-dsh-market-root] — are bare flex columns with
-     NO background of their own: unlike the chat surface they never painted a
-     panel, so the wallpaper sits directly behind their lists, which is what
-     makes them unreadable. They are neither dialogs nor dockkit floats, so no
-     hook above reaches them.
-     Both attributes are stable, build-independent hooks shipped by the
-     packages themselves (the plugin manager puts data-plugin-panel on the
-     SAME node that carries its page class), so no class-hash guessing. */
+  /* Full-page plugin surfaces that ship NO background of their own.
+     They are bare flex columns (height:100% + overflow) with no paint at all,
+     so the wallpaper sits directly behind their lists — this is the single
+     most common "the page is broken" report against this skin. None of them is
+     a dialog or a dockkit float, so no hook above reaches them.
+     Every selector here is authored by the owning package and survives builds:
+       - [data-plugin-panel]     built-in plugin manager (data attr on the page)
+       - [data-dsh-market-root]  dshmarket page root (data attr)
+       - .dsh-st-main-panel      @michengai/dsh-automation (定时任务, v1.0.10)
+       - .dsham_mainPanel        @michengai/dsh-archive-manager
+       - .dssm-main-panel        @michengai/dsh-skills-manager
+       - .dsm-xdpool-page        dsh-xdpool
+     The last four are plain hand-written class names (not CSS-module hashes),
+     which is exactly why they are usable; a plugin bump could rename one, in
+     which case that page simply loses its frost again (tests pin the names). */
   ${scope} [data-plugin-panel],
-  ${scope} [data-dsh-market-root] {
+  ${scope} [data-dsh-market-root],
+  ${scope} .dsh-st-main-panel,
+  ${scope} .dsham_mainPanel,
+  ${scope} .dssm-main-panel,
+  ${scope} .dsm-xdpool-page {
     background: var(--dsh-skins-frost-surface, ${surface(frost.light, density)});
     backdrop-filter: blur(${blurPx}px) saturate(1.3);
     -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.3);
   }
   ${scope}[data-ds-dark-theme] [data-plugin-panel],
-  ${scope}[data-ds-dark-theme] [data-dsh-market-root] {
+  ${scope}[data-ds-dark-theme] [data-dsh-market-root],
+  ${scope}[data-ds-dark-theme] .dsh-st-main-panel,
+  ${scope}[data-ds-dark-theme] .dsham_mainPanel,
+  ${scope}[data-ds-dark-theme] .dssm-main-panel,
+  ${scope}[data-ds-dark-theme] .dsm-xdpool-page {
     background: var(--dsh-skins-frost-surface, ${surface(frost.dark, density)});
   }
   /* The other sidebar panels DO paint a background — they use

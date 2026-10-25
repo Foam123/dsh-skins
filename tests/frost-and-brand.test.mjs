@@ -110,10 +110,19 @@ test("frost: full-page plugin surfaces get a surface (they ship with none)", () 
   const tints = { frost: { light: "1, 2, 3", dark: "4, 5, 6" }, menu: { light: "1, 2, 3", dark: "4, 5, 6" } };
   const css = frostFamilyCss("body[x]", tints, { frost: 91 });
 
-  // Both hooks are stable attributes shipped by the packages themselves, never
-  // per-build class hashes.
+  // Hooks are authored by the owning packages, never per-build CSS-module
+  // hashes: two data attributes plus the plain class names that the
+  // @michengai/* and dsh-xdpool panels render on their main-slot root.
   assert.ok(css.includes("[data-plugin-panel]"), "plugin manager page hook");
   assert.ok(css.includes("[data-dsh-market-root]"), "market page hook");
+  for (const [cls, label] of [
+    [".dsh-st-main-panel", "定时任务 (@michengai/dsh-automation)"],
+    [".dsham_mainPanel", "归档 (@michengai/dsh-archive-manager)"],
+    [".dssm-main-panel", "技能 (@michengai/dsh-skills-manager)"],
+    [".dsm-xdpool-page", "XD Pool (dsh-xdpool)"],
+  ]) {
+    assert.ok(css.includes(cls), `${label}: page root hook`);
+  }
   assert.ok(css.includes(".codexSubscriptionCard"), "Codex subscription config cards are frosted too");
   // The remaining sidebar panels paint bg-base themselves but add no blur, so
   // the wallpaper stays SHARP behind their lists. Their hooks are authored
